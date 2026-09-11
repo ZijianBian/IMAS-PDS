@@ -12,8 +12,8 @@
 # no longer takes data on ports -- it reads the entries named in `imports:` and takes
 # nothing but a time base from its input. That reconstructed equilibrium now reaches TORAX,
 # NICE and the controller the other way round: `merger` writes this design over it, so
-# anything this file is silent about keeps the reconstruction's value. See
-# workflows/utils/merger.py.
+# anything this file is silent about keeps the reconstruction's value. See the
+# IMAS-MUSCLE3 merger actor.
 #
 # `source` supplies a NICE-reconstructed equilibrium, not raw DINA -- see workflow.ymmsl's
 # header for why TORAX's geometry builder needs that.

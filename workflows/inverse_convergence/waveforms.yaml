@@ -15,7 +15,8 @@
 # takes data on ports -- it reads the entries named in `imports:` and takes nothing but a
 # time base from its input. That state now reaches NICE and TORAX the other way round:
 # `merger` writes this design over the loop's own equilibrium/core_profiles, so anything
-# this file is silent about keeps the loop's value. See workflows/utils/merger.py.
+# this file is silent about keeps the loop's value. See the IMAS-MUSCLE3 merger
+# actor.
 #
 # Scenarios using MD_LAYOUT=combined (no separate data/in_md) need a variant with
 # `machine` pointing at data/in -- see cases/overrides/inverse_convergence_105073_waveforms.yaml.

@@ -26,7 +26,7 @@ imports:
 - from imas_muscle3 import implementation olc_component
 - from lib.easybuild_programs import implementation loop
 - from lib.easybuild_programs import implementation waveform_editor
-- from lib.easybuild_programs import implementation merger
+- from imas_muscle3 import implementation merger_component
 - from lib.easybuild_programs import implementation torax
 - from lib.easybuild_programs import implementation nice_inv
 - from lib.easybuild_programs import implementation load_balancer
@@ -142,9 +142,9 @@ models:
         # of the state it solves from (psi, f_df_dpsi, dpressure_dpsi) -- the former from
         # the design, the latter only known to the loop.
         # core_profiles: TORAX needs the designed Ip on top of the evolved profiles.
-        implementation: merger
+        implementation: merger_component
         ports:
-          f_init: [base_equilibrium, overlay_equilibrium, base_core_profiles, overlay_core_profiles]
+          f_init: [equilibrium_base, equilibrium_overlay, core_profiles_base, core_profiles_overlay]
           o_f: [equilibrium_out, core_profiles_out]
 
       equilibrium:
@@ -192,11 +192,11 @@ models:
       # The loop's pulse both sets the design's time base and is the IDS the design is
       # merged onto, so the two can never disagree about time -- which is what makes
       # merger's strict time check safe here.
-      loop.equilibrium_out_i: [waveform_editor.equilibrium_in, merger.base_equilibrium]
-      loop.core_profiles_out_i: merger.base_core_profiles
+      loop.equilibrium_out_i: [waveform_editor.equilibrium_in, merger.equilibrium_base]
+      loop.core_profiles_out_i: merger.core_profiles_base
 
-      waveform_editor.equilibrium_out: merger.overlay_equilibrium
-      waveform_editor.core_profiles_out: merger.overlay_core_profiles
+      waveform_editor.equilibrium_out: merger.equilibrium_overlay
+      waveform_editor.core_profiles_out: merger.core_profiles_overlay
       merger.equilibrium_out: equilibrium.equilibrium_in
       merger.core_profiles_out: transport.core_profiles_in_f
 

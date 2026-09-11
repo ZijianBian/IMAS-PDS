@@ -15,7 +15,7 @@
 #
 # The evolved state (psi, f_df_dpsi, dpressure_dpsi, the core_profiles profiles) is not
 # here: it reaches NICE and TORAX through `merger`, which writes this design over the
-# loop's own equilibrium/core_profiles. See workflows/utils/merger.py.
+# loop's own equilibrium/core_profiles. See the IMAS-MUSCLE3 merger actor.
 
 version: 0.2
 dd_version: 4.0.0
