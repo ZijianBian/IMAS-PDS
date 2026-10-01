@@ -35,7 +35,7 @@ Scenarios available: 105078, 105084, 105092, 105099.
 
 Only the input DBEntry (`data/in`, `data/in_md`) is read live from `pds-scenarios`; the
 pulse design (`waveforms_no_transport.yaml`) lives in this workflow's own directory, so it's
-versioned and editable here. See `pds-scenarios`' `GENERATING.md` for how `data/` itself is
+versioned and editable here. See [`preprocessing/README.md`](../../preprocessing/README.md) for how `data/` itself is
 produced from DINA and machine-description sources.
 
 ## Assumptions
@@ -55,7 +55,7 @@ produced from DINA and machine-description sources.
 
 ## Input requirements
 
-Produced by `tools/prepare <shot>` in the `pds-scenarios` repository.
+Produced by `preprocessing/prepare <shot>` (converter in `preprocessing/dina2pds/`; ITER has no iron core, so the converter writes an empty static `iron_core`).
 
 - A DINA-derived source supplying the equilibrium boundary/target trace to seed NICE's first solve:
   `vacuum_toroidal_field/r0`

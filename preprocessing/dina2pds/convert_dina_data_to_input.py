@@ -5,6 +5,7 @@ Script to build valid inputs for the PDS couplings from DINA output data.
 import argparse
 import logging
 from contextlib import ExitStack
+from urllib.parse import urlsplit
 
 from imas import DBEntry
 from preprocess_dina import write_dina_data
@@ -38,7 +39,12 @@ def handle_args():
     parser.add_argument(
         "--md_iron_core_uri",
         type=str,
-        help="URI to load machine description data for iron_core",
+        default="empty",
+        help="URI to load machine description data for iron_core, or 'empty' "
+        "(default; also an empty string) for a machine without an iron core such as "
+        "ITER: an empty static iron_core IDS is then created. A URI whose path ends "
+        "in 'iron_core_empty' (legacy source.env files point at "
+        "$TOOLS/md/iron_core_empty, no longer shipped) is treated as 'empty' too.",
     )
     parser.add_argument(
         "--sink_uri", type=str, help="URI to write the DINA-derived input data to"
@@ -59,6 +65,25 @@ def handle_args():
     return args
 
 
+def is_empty_iron_core(uri):
+    """True when --md_iron_core_uri asks for an empty iron_core IDS.
+
+    Accepts "empty", an empty string, or -- for legacy source.env files written
+    before the empty reference entry was removed from the repository -- a URI whose
+    path's last component is "iron_core_empty" (e.g.
+    imas:hdf5?path=$TOOLS/md/iron_core_empty). That entry never held more than
+    ids_properties, so it is recreated in memory instead of being read.
+    """
+    if uri is None or uri.strip() in ("", "empty"):
+        return True
+    query = urlsplit(uri).query
+    path = next(
+        (v for k, _, v in (p.partition("=") for p in query.split("&")) if k == "path"),
+        uri,
+    )
+    return path.rstrip("/").rsplit("/", 1)[-1] == "iron_core_empty"
+
+
 def main():
     """
     convert to DDV4
@@ -73,7 +98,12 @@ def main():
         db_md_pf_active = stack.enter_context(DBEntry(args.md_pf_active_uri, "r"))
         db_md_pf_passive = stack.enter_context(DBEntry(args.md_pf_passive_uri, "r"))
         db_md_wall = stack.enter_context(DBEntry(args.md_wall_uri, "r"))
-        db_md_iron_core = stack.enter_context(DBEntry(args.md_iron_core_uri, "r"))
+        # None: preprocess_iron_core creates an empty static iron_core (ITER).
+        db_md_iron_core = (
+            None
+            if is_empty_iron_core(args.md_iron_core_uri)
+            else stack.enter_context(DBEntry(args.md_iron_core_uri, "r"))
+        )
         db_out = stack.enter_context(DBEntry(args.sink_uri, "w"))
         db_md_out = (
             db_out

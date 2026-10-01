@@ -1,0 +1,31 @@
+# Pulse file for 105084 -- see cases/pulses/TEMPLATE.yaml for every key.
+# Regenerate source.env with: bin/pds-configure cases/pulses/105084.yaml
+shot: 105084
+description: "Boundary-prescribed pulse design for DINA shot 105084; source: official ITER store /work/imas/shared/imasdb (HDF5)"
+
+# Preparation only. 105084 already has HAND-WRITTEN overrides in cases/overrides/, kept as
+# they are (generating them from this file would change the cases):
+#   evolutive_controller_105084.ymmsl
+#   inverse_convergence_105084_literal*
+#   metis_from_dina_105084.ymmsl
+#   metis_nice_inverse_from_dina_105084.ymmsl
+# This file drives the data preparation and the plot times only.
+workflows: []
+
+prepare:
+  source: imas:hdf5?path=/work/imas/shared/imasdb/ITER/3/105084/1
+  # The stored data (pds-scenarios) were prepared with the "legacy" set (ITER_MD
+  # 111001/203, 115005/2, 116000/4); "basic" = the active ITER_MD versions.
+  machine_description: basic
+  n_timeslices: 41
+  md_layout: separate
+  dd_version: "4.0.0"
+
+time:
+  # Stored slice range 2.42 .. 280.35 s, rounded outward to 0.1 s.
+  # Applies only to overrides generated from this file (none today).
+  t_start: 2.4
+  t_end: 280.4
+
+postprocess:
+  t_list: [10, 150, 270]

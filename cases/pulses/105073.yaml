@@ -1,0 +1,39 @@
+# Pulse file for 105073 -- see cases/pulses/TEMPLATE.yaml for every key.
+# Regenerate source.env with: bin/pds-configure cases/pulses/105073.yaml
+shot: 105073
+description: "DINA shot 105073, prepared for inverse_convergence and the forward co-simulation workflows; source: DINA project database /work/projects/dina/imasdb (MDSplus), not the official ITER store"
+
+# Preparation only. 105073 already has HAND-WRITTEN overrides in cases/overrides/, kept
+# as they are (generating them from this file would change the cases):
+#   inverse_convergence_105073*        combined-layout waveforms, calibrated TORAX, own NICE xml
+#   evolutive_controller_105073*
+#   metis_nice_inverse_from_dina_105073.ymmsl
+# This file drives the data preparation and the plot times only.
+workflows: []
+
+prepare:
+  source: imas:mdsplus?path=/work/projects/dina/imasdb/iter/3/105073/6
+  # The stored data (pds-scenarios) were prepared with the "legacy" set (ITER_MD
+  # 111001/203, 115005/2, 116000/4); "basic" = the active ITER_MD versions.
+  machine_description: basic
+  n_timeslices: 41
+  # combined: the MD IDSs are written into data/in (hand-written overrides expect it)
+  md_layout: combined
+  dd_version: "4.0.0"
+
+time:
+  # Loop window of the hand-written inverse_convergence override (loop.t_min/t_max).
+  # Applies only to overrides generated from this file (none today).
+  t_start: 10.0
+  t_end: 205.0
+
+# TORAX calibration found in the hand-written
+# cases/overrides/inverse_convergence_105073_config_torax.py (the only differences from
+# workflows/inverse_convergence/config_torax.py). Recorded here, NOT active, so it is not
+# lost if the overrides are ever generated from this file:
+# transport_calibration:
+#   model: bohm-gyrobohm
+#   chi_multiplier: {0: 1.8, 140: 1.8, 175: 4.0, 205: 4.0}   # all four BgB multipliers
+
+postprocess:
+  t_list: [25, 130, 175]

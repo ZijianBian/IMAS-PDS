@@ -1,0 +1,45 @@
+#!/bin/bash
+# pds-configure -- generate every shot-specific PDS file from one pulse file.
+#
+#   pds-configure <pulse.yaml> [--workflow WF ...] [--prepare] [--create] [--force]
+#                 [--dry-run] [--print-t-list]
+#
+#   e.g. pds-configure cases/pulses/105033.yaml --dry-run      # show what would be written
+#        pds-configure cases/pulses/105033.yaml                # write source.env + overrides
+#        pds-configure cases/pulses/105033.yaml --prepare --create
+#        pds-configure cases/pulses/105033.yaml --workflow inverse_convergence --create
+#
+# Writes $SCENARIOS_REPO/<shot>/source.env and cases/overrides/<wf>_<shot>.ymmsl (plus a
+# calibrated <wf>_<shot>_config_torax.py when the pulse file has transport_calibration).
+# --prepare runs preprocessing/prepare (the scenario data, see preprocessing/README.md);
+# --create runs bin/pds-create-case, records the data root in each new case's case.env
+# (so post-processing needs no SCENARIOS_REPO at submit time) and runs
+# preprocessing/check_scenario.py. The pulse-file format and all options are documented
+# in pds/configure.py (module docstring) and in cases/pulses/TEMPLATE.yaml.
+#
+# Scenario data root: SCENARIOS_REPO, default $PDS_REPO/scenarios (generated, not
+# committed); exported to pds-create-case and preprocessing/prepare.
+#
+# Runs in the IMAS-MUSCLE3/1.0.0-intel-2025b-pds environment (loaded here if the current
+# python3 lacks PyYAML/imas-python). That environment also has everything
+# preprocessing/prepare needs, so --prepare runs it with the same interpreter.
+set -euo pipefail
+
+PDS_REPO="${PDS_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+export PDS_REPO
+export SCENARIOS_REPO="${SCENARIOS_REPO:-$PDS_REPO/scenarios}"
+
+if ! python3 -c "import yaml, imas" >/dev/null 2>&1; then
+  : "${PDS_MODULEPATH:=/work/projects/pds/modules/all}"
+  if [[ -z "${EBROOTIMASMINMUSCLE3:-}" ]]; then
+    LMOD_INIT="/usr/share/lmod/lmod/init/bash"
+    if [[ -f "$LMOD_INIT" ]]; then
+      source "$LMOD_INIT"
+      module use "$PDS_MODULEPATH" 2>/dev/null || true
+      module load IMAS-MUSCLE3/1.0.0-intel-2025b-pds 2>/dev/null || true
+    fi
+  fi
+  : "${EBROOTIMASMINMUSCLE3:?$0: IMAS-MUSCLE3/1.0.0-intel-2025b-pds not loaded and could not be loaded automatically -- run 'module use $PDS_MODULEPATH && module load PDS' first}"
+fi
+
+PYTHONPATH="$PDS_REPO${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m pds.configure "$@"

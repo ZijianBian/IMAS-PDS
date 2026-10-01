@@ -13,11 +13,11 @@
 # $CASE_DIR/preprocess_settings.ymmsl, stacked in by bin/pds-run-case.sbatch.
 set -euo pipefail
 
-# SOURCE_URI (raw DINA). source.env is written to be sourced by pds-scenarios' own
-# tools/prepare, which sets $TOOLS first (its own tools/ dir, for MD_IRON_CORE) -- replicate
-# that here rather than pulling in tools/prepare itself. IMAS_VERSION comes from the PDS
+# SOURCE_URI (raw DINA). source.env is written to be sourced by preprocessing/prepare,
+# which sets $TOOLS first (its own dir, for MD_IRON_CORE) -- replicate
+# that here rather than pulling in preprocessing/prepare itself. IMAS_VERSION comes from the PDS
 # module already loaded.
-export TOOLS="$SCENARIOS_REPO/tools"
+export TOOLS="$PDS_REPO/preprocessing"
 source "$SCENARIOS_REPO/$SHOT/source.env"
 
 OUT="$CASE_DIR/preprocess"

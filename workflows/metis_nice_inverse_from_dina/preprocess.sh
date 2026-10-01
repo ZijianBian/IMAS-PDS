@@ -15,10 +15,10 @@
 set -euo pipefail
 
 # SOURCE_URI/SUMMARY_URI/MD_*/N_TIMESLICES (raw DINA + standard machine description).
-# source.env is written to be sourced by pds-scenarios' own tools/prepare, which sets $TOOLS
-# first (its own tools/ dir, for MD_IRON_CORE) -- replicate that here rather than pulling in
-# tools/prepare itself. IMAS_VERSION comes from the PDS module already loaded.
-export TOOLS="$SCENARIOS_REPO/tools"
+# source.env is written to be sourced by preprocessing/prepare, which sets $TOOLS
+# first (its own dir, for MD_IRON_CORE) -- replicate that here rather than pulling in
+# preprocessing/prepare itself. IMAS_VERSION comes from the PDS module already loaded.
+export TOOLS="$PDS_REPO/preprocessing"
 source "$SCENARIOS_REPO/$SHOT/source.env"
 
 OUT="$CASE_DIR/preprocess"
@@ -26,7 +26,7 @@ mkdir -p "$OUT"
 
 export IMAS_AL_DISABLE_VALIDATE=1
 
-python "$PDS_REPO/workflows/utils/convert_dina_data_to_input.py" \
+python "$PDS_REPO/preprocessing/dina2pds/convert_dina_data_to_input.py" \
   --source_uri "$SOURCE_URI" \
   --summary_uri "${SUMMARY_URI:-$SOURCE_URI}" \
   --md_pf_active_uri "$MD_PF_ACTIVE" \

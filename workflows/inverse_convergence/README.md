@@ -51,7 +51,7 @@ source data as 105084, a literal rather than loop-designed pulse).
 Only the input DBEntry (`data/in`, `data/in_md`) is read live from `pds-scenarios`; the
 pulse design (`waveforms.yaml`) lives in this workflow's own directory, and any per-shot
 variant or calibrated solver config lives under `cases/overrides/`, so both are versioned
-and editable here. See `pds-scenarios`' `GENERATING.md` for how `data/` itself is produced
+and editable here. See [`preprocessing/README.md`](../../preprocessing/README.md) for how `data/` itself is produced
 from DINA and machine-description sources.
 
 ## Assumptions
@@ -68,7 +68,7 @@ from DINA and machine-description sources.
 
 ## Input requirements
 
-Produced by `tools/prepare <shot>` in the `pds-scenarios` repository.
+Produced by `preprocessing/prepare <shot>` (converter in `preprocessing/dina2pds/`; ITER has no iron core, so the converter writes an empty static `iron_core`).
 
 - A DINA-derived source supplying the equilibrium boundary/target trace, plus `core_profiles`
   (electron/ion temperature and density) for TORAX and the ECRH heating trace picked up via

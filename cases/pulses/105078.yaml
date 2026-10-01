@@ -1,0 +1,28 @@
+# Pulse file for 105078 -- see cases/pulses/TEMPLATE.yaml for every key.
+# Regenerate source.env with: bin/pds-configure cases/pulses/105078.yaml
+shot: 105078
+description: "DINA shot 105078; source: DINA project database /work/projects/dina/imasdb (MDSplus), not the official ITER store"
+
+# Preparation only. 105078 already has HAND-WRITTEN overrides in cases/overrides/, kept as
+# they are (generating them from this file would change the cases):
+#   metis_nice_inverse_from_dina_105078.ymmsl
+# This file drives the data preparation and the plot times only.
+workflows: []
+
+prepare:
+  source: imas:mdsplus?path=/work/projects/dina/imasdb/iter/3/105078/6
+  # The stored data (pds-scenarios) were prepared with the "legacy" set (ITER_MD
+  # 111001/203, 115005/2, 116000/4); "basic" = the active ITER_MD versions.
+  machine_description: basic
+  n_timeslices: 41
+  md_layout: separate
+  dd_version: "4.0.0"
+
+time:
+  # Stored slice range 2.52 .. 282.82 s, rounded outward to 0.1 s.
+  # Applies only to overrides generated from this file (none today).
+  t_start: 2.5
+  t_end: 282.9
+
+postprocess:
+  t_list: [20, 150, 270]

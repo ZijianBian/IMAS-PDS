@@ -14,7 +14,10 @@
 #   workflow.ymmsl           the workflow's structure
 #   workflow_settings.ymmsl  the workflow's generic settings (resources, solver defaults,
 #                            and the ${SHOT}-templated pds-scenarios data/waveform paths)
-#   scenario_settings.ymmsl  cases/overrides/<workflow>_<shot>.ymmsl, if it exists --
+#   scenario_settings.ymmsl  the shot's override: the hand-written
+#                            cases/overrides/<workflow>_<shot>.ymmsl if it exists, else the
+#                            generated cases/overrides/generated/<workflow>_<shot>.ymmsl
+#                            (bin/pds-configure), else none -- whole file, never merged;
 #                            numeric tuning a shot needs beyond the generic template
 #                            (loop windows, a calibrated config_torax.py, ...)
 #   config/<name>            a local copy of every NICE/TORAX/recorder/waveform config file the
@@ -73,6 +76,7 @@ WF="$PDS_REPO/workflows/$WF_NAME"
 export SHOT="$2"
 export SCENARIOS_REPO="${SCENARIOS_REPO:-/work/projects/pds/pds-scenarios}"
 OVERRIDE="$PDS_REPO/cases/overrides/${WF_NAME}_${SHOT}.ymmsl"
+[[ -f "$OVERRIDE" ]] || OVERRIDE="$PDS_REPO/cases/overrides/generated/${WF_NAME}_${SHOT}.ymmsl"
 CASE_DIR="${3:-$PDS_REPO/cases/${WF_NAME}_${SHOT}}"
 export CASE_DIR
 VARS='${PDS_REPO} ${SCENARIOS_REPO} ${SHOT} ${CASE_DIR}'
@@ -103,6 +107,14 @@ if [[ -d "$CASE_DIR" && "$FORCE" -eq 0 ]]; then
   else
     echo "pds-create-case: ${CASE_DIR#"$PDS_REPO"/} exists, rebuilding it" >&2
   fi
+fi
+
+if [[ ! -f "$OVERRIDE" ]]; then
+  echo "pds-create-case: no override (generic workflow settings only)" >&2
+elif [[ "$OVERRIDE" == */generated/* ]]; then
+  echo "pds-create-case: using generated override ${OVERRIDE#"$PDS_REPO"/}" >&2
+else
+  echo "pds-create-case: using hand-written override ${OVERRIDE#"$PDS_REPO"/}" >&2
 fi
 
 rm -rf "$CASE_DIR"
