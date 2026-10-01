@@ -42,4 +42,7 @@ if ! python3 -c "import yaml, imas" >/dev/null 2>&1; then
   : "${EBROOTIMASMINMUSCLE3:?$0: IMAS-MUSCLE3/1.0.0-intel-2025b-pds not loaded and could not be loaded automatically -- run 'module use $PDS_MODULEPATH && module load PDS' first}"
 fi
 
-PYTHONPATH="$PDS_REPO${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m pds.configure "$@"
+# Run configure.py as a script, not "python3 -m pds.configure": importing the pds package
+# runs pds/__init__.py, which needs the installed package metadata (absent in a plain
+# checkout). configure.py itself only needs the standard library, PyYAML and imas.
+exec python3 "$PDS_REPO/pds/configure.py" "$@"

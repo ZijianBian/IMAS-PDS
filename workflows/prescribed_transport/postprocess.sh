@@ -9,7 +9,7 @@ set -euo pipefail
 
 PULSE_FILE="$PDS_REPO/cases/pulses/$SHOT.yaml"
 if [[ -f "$PULSE_FILE" ]]; then
-  T_LIST="$(PYTHONPATH="$PDS_REPO${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON" -m pds.configure "$PULSE_FILE" --print-t-list)"
+  T_LIST="$("$PYTHON" "$PDS_REPO/pds/configure.py" "$PULSE_FILE" --print-t-list)"
 else
 case "$SHOT" in
   105073) T_LIST="25 130 175" ;;
