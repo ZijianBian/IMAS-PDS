@@ -23,18 +23,40 @@ logger = logging.getLogger(__name__)
 DD_VERSION = "4.0.0"
 
 
-def write_dina_data(db_out, db_in, db_sum, db_md_pf_active, n_timeslices):
+# Two selected times closer than this are the same slice (written once).
+DUPLICATE_TIME_TOL = 1e-9
+
+
+def write_dina_data(
+    db_out,
+    db_in,
+    db_sum,
+    db_md_pf_active,
+    n_timeslices=None,
+    dt_step=None,
+    report_window=None,
+):
     """Write the data derived from the DINA source run: equilibrium, core_profiles and
     core_sources at the selected timeslices, plus a pf_active trace that merges DINA's
     actual coil currents onto machine-description geometry (kept for later validation
     plots comparing DINA's currents against NICE's inverse solution).
 
+    The slices are selected by exactly one of ``n_timeslices`` (that many targets
+    uniform over the viable range) or ``dt_step`` (one target every ``dt_step`` seconds
+    from the first viable time), see find_interesting_time_slices. A selected slice
+    whose time equals one already written (both picks walked forward onto the same raw
+    sample) is written only once. ``report_window`` (t_start, t_end), optional, adds
+    the number of slices inside that window to the summary line logged at the end.
+
     Returns the list of selected timeslices.
     """
     summary = db_sum.get("summary", autoconvert=False)
     time_array = summary.time
-    interesting_time_slices = find_interesting_time_slices(summary, n_timeslices)
+    interesting_time_slices = find_interesting_time_slices(
+        summary, n_timeslices, dt_step=dt_step
+    )
     skipped = []
+    duplicates = []
     t_list = []
 
     for idx in interesting_time_slices:
@@ -57,6 +79,9 @@ def write_dina_data(db_out, db_in, db_sum, db_md_pf_active, n_timeslices):
                 break
         if bndr_len == 0:
             skipped.append(t)
+            continue
+        if any(abs(t - t_done) <= DUPLICATE_TIME_TOL for t_done in t_list):
+            duplicates.append(t)
             continue
         if Version(eq_orig._dd_version) < Version(DD_VERSION):
             eq_orig_ts = eq_orig.time_slice[0]
@@ -119,7 +144,58 @@ def write_dina_data(db_out, db_in, db_sum, db_md_pf_active, n_timeslices):
     logger.info(
         "Following timeslices during preprocessing were not viable: %s", skipped
     )
+    if duplicates:
+        logger.warning(
+            "time slices already written (two selections reached the same raw time),"
+            " skipped: %s",
+            ", ".join(f"{t:.4f} s" for t in duplicates),
+        )
+    logger.warning(
+        "%s",
+        selection_summary(
+            t_list, summary, n_timeslices, dt_step, report_window=report_window
+        ),
+    )
     return t_list
+
+
+def _viable_indices(sm):
+    """Raw summary indices with magnetic axis R > 1 m and |Ip| > 50 kA."""
+    R = sm.boundary.magnetic_axis_r.value
+    ip = sm.global_quantities.ip.value
+    return [i for i in range(len(R)) if R[i] > 1 and abs(ip[i]) > 50e3]
+
+
+def _spacing(times):
+    """'min/median/max = a/b/c s' of the intervals between consecutive times."""
+    if len(times) < 2:
+        return "spacing n/a (fewer than 2 slices)"
+    d = np.diff(np.asarray(times, dtype=float))
+    return f"spacing min/median/max = {d.min():.3f}/{np.median(d):.3f}/{d.max():.3f} s"
+
+
+def selection_summary(t_list, sm, n_timeslices, dt_step, report_window=None):
+    """One line describing the written time slices (for the preparation log)."""
+    method = (
+        f"dt_step={dt_step:g} s"
+        if dt_step is not None
+        else f"n_timeslices={n_timeslices}"
+    )
+    valid = _viable_indices(sm)
+    if valid:
+        t = sm.time
+        viable = f"viable range {t[valid[0]]:.2f}..{t[valid[-1]]:.2f} s"
+    else:
+        viable = "no viable raw sample"
+    line = f"time slices: {len(t_list)} written (method: {method}, {viable})"
+    if report_window is None:
+        return f"{line}; {_spacing(t_list)}"
+    t0, t1 = report_window
+    inside = [t for t in t_list if t0 <= t <= t1]
+    return (
+        f"{line}; {len(inside)} inside the simulation window [{t0:g}, {t1:g}] s;"
+        f" {_spacing(inside)} in window"
+    )
 
 
 def preprocess_pf_active(db_out, db_in, db_md_pf_active, t_list):
@@ -416,7 +492,19 @@ def _split_multi_element_coils(slice, slice_backup):
         )
 
 
-def find_interesting_time_slices(sm, n_timeslices):
+def find_interesting_time_slices(sm, n_timeslices=None, dt_step=None):
+    """Raw summary indices of the slices to prepare, sorted and unique.
+
+    Exactly one of ``n_timeslices`` and ``dt_step`` is given. ``dt_step``: target times
+    first viable time, +dt_step, +2 dt_step, ... up to the last viable time, each
+    mapped to the nearest viable raw index. ``n_timeslices``: ``n_timeslices`` targets
+    uniform over the viable range (the original selection, kept unchanged).
+    """
+    if (n_timeslices is None) == (dt_step is None):
+        raise ValueError("give exactly one of n_timeslices and dt_step")
+    if dt_step is not None:
+        return _time_slices_by_dt(sm, dt_step)
+    assert n_timeslices is not None
     t = sm.time
     # energy signal
     wth = sm.global_quantities.energy_thermal.value
@@ -460,3 +548,25 @@ def find_interesting_time_slices(sm, n_timeslices):
         {int(idx) for idx in f_nearest(np.linspace(0, 1, n_timeslices))}
     )
     return indice_selected
+
+
+def _time_slices_by_dt(sm, dt_step):
+    """Nearest viable raw index to each of t_v0, t_v0 + dt, ... <= t_v1."""
+    if not dt_step > 0:
+        raise ValueError(f"dt_step must be > 0, got {dt_step}")
+    valid = np.asarray(_viable_indices(sm), dtype=int)
+    if valid.size == 0:
+        return []
+    if valid.size == 1:
+        return [int(valid[0])]
+    t_valid = np.asarray(sm.time, dtype=float)[valid]
+    t0, t1 = t_valid[0], t_valid[-1]
+    # Tolerance so that a last target landing on t1 up to rounding is kept.
+    n = int(np.floor((t1 - t0) / dt_step + 1e-9)) + 1
+    targets = t0 + dt_step * np.arange(n)
+    # Nearest viable sample: t_valid is increasing, compare the two neighbours.
+    pos = np.clip(np.searchsorted(t_valid, targets), 1, len(t_valid) - 1)
+    left = t_valid[pos - 1]
+    right = t_valid[pos]
+    pos = np.where(targets - left <= right - targets, pos - 1, pos)
+    return sorted({int(i) for i in valid[pos]})

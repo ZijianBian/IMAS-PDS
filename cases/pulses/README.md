@@ -80,10 +80,17 @@ Fill in:
   prepared data are written at (exported as `IMAS_VERSION` to the preparation). 4.0.0 is
   the version of the stored data of the existing scenarios; keep it unless you know
   every workflow you use reads another one.
-- `prepare.n_timeslices`: the number of time slices to prepare. This sets the **outer time
-  grid** of the simulation: slices are chosen uniformly in time over the viable part of
-  the pulse (|Ip| > 50 kA and magnetic axis R > 1 m). Picks that are not viable are
-  skipped, so you may get one or two fewer slices than requested.
+- `prepare.n_timeslices` **or** `prepare.dt_step` (exactly one): the time slices to
+  prepare. This sets the **outer time grid** of the simulation, over the viable part of
+  the pulse (|Ip| > 50 kA and magnetic axis R > 1 m).
+  - `n_timeslices` (int >= 2): that many slices, chosen uniformly in time over the
+    viable range. Picks that are not viable are skipped, so you may get one or two
+    fewer slices than requested.
+  - `dt_step` (float > 0, seconds): one slice every `dt_step` from the first viable time
+    up to the last viable time, each taken at the nearest viable raw sample. Use it for
+    a known spacing whatever the pulse length. With `prepare.metis`, set `metis.nbt`
+    too (it otherwise defaults to `n_timeslices`).
+  - Either way, a slice whose time was already written is written only once.
 - `workflows`: the workflows to set up. `TEMPLATE.yaml` (and 105033) list all five
   supported ones; remove those you do not intend to run.
   **This list controls two things: which workflows `bin/pds-configure` generates an
@@ -106,7 +113,7 @@ Fill in:
   so `t_start: 12.0`.
 - `time.t_end`: before the last viable slice.
 - `t_start` and `t_end` only **select** slices from the prepared grid; they do not create
-  new ones. For more slices, raise `n_timeslices` and rerun Step 1.
+  new ones. For more slices, raise `n_timeslices` (or lower `dt_step`) and rerun Step 1.
 - `time.transport_dt`: TORAX's internal time step between two slices in
   inverse_convergence (default 0.3 s).
 - `time.forward_dt` and `time.forward_source_dt`: only for evolutive_controller.
@@ -149,7 +156,7 @@ Depending on which keys you change, rerun only the corresponding steps:
 
 | Keys you change | Then rerun |
 |---|---|
-| `prepare:` (source, machine_description, n_timeslices, md_layout, dd_version) | Step 1 (`--prepare`), then Step 2 (`--create`) |
+| `prepare:` (source, machine_description, n_timeslices or dt_step, md_layout, dd_version) | Step 1 (`--prepare`), then Step 2 (`--create`) |
 | `time:`, `workflows:`, `transport_calibration:` | Step 2 (`--create`) only |
 | `postprocess.t_list` | nothing: read from the pulse file at the end of each run |
 
@@ -234,7 +241,7 @@ bin/pds-configure cases/pulses/<shot>.yaml --prepare
 `preprocessing/prepare` (details in [`preprocessing/README.md`](../../preprocessing/README.md)),
 which:
 
-- selects the time slices (see `n_timeslices` above);
+- selects the time slices (see `n_timeslices` / `dt_step` above);
 - converts the DINA data to Data Dictionary 4 (`prepare.dd_version`, default 4.0.0);
 - adds the machine description;
 - for older DINA runs with 12 PF coils, converts them to the current 14-coil layout,
@@ -247,6 +254,15 @@ Expected messages, all harmless:
 - messages about snapping rho to 1.0;
 - a `RuntimeWarning: divide by zero` from the imas library;
 - fewer prepared slices than requested (non-viable picks skipped).
+
+One line summarises the selection, with the count inside the simulation window
+(`time.t_start` / `time.t_end`, passed only for this log), for example:
+
+```
+time slices: 39 written (method: n_timeslices=41, viable range 1.20..116.01 s); 35 inside the simulation window [12, 113.5] s; spacing min/median/max = 2.850/2.875/2.900 s in window
+```
+
+Check that the in-window count and spacing are what you want before Step 2.
 
 ## Step 2 - Create the cases
 

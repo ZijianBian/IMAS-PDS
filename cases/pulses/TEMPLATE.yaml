@@ -40,10 +40,14 @@ prepare:
   # 105073/78/84/92/99 were prepared with (use only to reproduce them); or a mapping:
   #   {pf_active: <uri>, pf_passive: <uri>, wall: <uri>, iron_core: <uri> | empty}
   machine_description: basic
-  # required int >= 2: number of prepared slices. This slice grid IS the outer time grid
-  # of inverse_convergence and prescribed_transport; time.t_start/t_end below only select
-  # slices from it.
+  # Slice selection, exactly one of:
+  #   n_timeslices (int >= 2): number of prepared slices, uniform over the viable range;
+  #   dt_step (float > 0, s): one slice every dt_step seconds from the first viable time,
+  #     each mapped to the nearest viable raw sample (with metis: also set metis.nbt).
+  # This slice grid IS the outer time grid of inverse_convergence and
+  # prescribed_transport; time.t_start/t_end below only select slices from it.
   n_timeslices: 41
+  # dt_step: 1.0
   # optional: separate (default; data/in + data/in_md, required by inverse_convergence and
   # prescribed_transport) or combined (data/in only, needs hand-written overrides)
   md_layout: separate

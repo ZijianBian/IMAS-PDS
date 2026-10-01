@@ -40,9 +40,14 @@ Pulse file keys
         ITER has no iron core, so in both sets iron_core is ``empty``: the converter
         creates an empty static iron_core IDS (a real URI is only needed for machines
         with an iron core, e.g. WEST).
-    ``n_timeslices`` (int >= 2, required)  -> ``N_TIMESLICES``, the number of prepared
-        slices. This slice grid is the outer time grid of inverse_convergence and
-        prescribed_transport.
+    ``n_timeslices`` (int >= 2) -> ``N_TIMESLICES``, or ``dt_step`` (float > 0, s)
+        -> ``DT_STEP``; exactly one is required. The slice selection:
+        ``n_timeslices`` slices uniform over the viable DINA time range, or one slice
+        every ``dt_step`` seconds from the first viable time (each mapped to the
+        nearest viable raw sample). This slice grid is the outer time grid of
+        inverse_convergence and prescribed_transport. ``time.t_start`` / ``t_end`` are
+        also written as ``REPORT_T_START`` / ``REPORT_T_END``, used only by the
+        preparation log (slices inside the simulation window).
     ``md_layout`` (``separate`` | ``combined``, default ``separate``) -> ``MD_LAYOUT``.
         inverse_convergence and prescribed_transport read ``data/in_md`` and therefore
         need ``separate``; ``combined`` with those workflows is rejected (such a shot
@@ -52,6 +57,7 @@ Pulse file keys
     ``metis`` (mapping, optional) with ``mode`` (``interpretative`` | ``predictive``)
         -> ``METIS_MODE`` and ``nbt`` (int) -> ``METIS_NBT``; written only if present,
         and ``--prepare`` then passes ``--metis`` to preprocessing/prepare.
+        ``nbt`` defaults to ``n_timeslices``, so it is required with ``dt_step``.
     ``dd_version`` (str, default ``"4.0.0"``) -> ``IMAS_VERSION`` of the
         preprocessing/prepare run, i.e. the data-dictionary version the prepared data
         are written at (recorded as a comment in source.env). 4.0.0 is the version of
@@ -301,7 +307,7 @@ class Pulse:
     summary: str | None
     machine_description: dict[str, str]
     md_name: str | None
-    n_timeslices: int
+    n_timeslices: int | None
     md_layout: str
     metis: dict[str, Any] | None
     dd_version: str
@@ -313,6 +319,7 @@ class Pulse:
     forward_t_start: float
     forward_t_end: float
     forward_source: str | None
+    dt_step: float | None = None
     loop: dict[str, Any] = field(default_factory=dict)
     calibration_model: str | None = None
     multipliers: dict[str, Table] = field(default_factory=dict)
@@ -455,11 +462,12 @@ def load_pulse(path: Path) -> Pulse:
             "summary",
             "machine_description",
             "n_timeslices",
+            "dt_step",
             "md_layout",
             "metis",
             "dd_version",
         ),
-        ("source", "machine_description", "n_timeslices"),
+        ("source", "machine_description"),
     )
     source = c.string(prep["source"], "prepare.source")
     summary = None
@@ -477,7 +485,22 @@ def load_pulse(path: Path) -> Pulse:
         machine_description = {
             k: c.string(md_map[k], f"prepare.machine_description.{k}") for k in MD_KEYS
         }
-    n_timeslices = c.integer(prep["n_timeslices"], "prepare.n_timeslices", minimum=2)
+    has_n = prep.get("n_timeslices") is not None
+    has_dt = prep.get("dt_step") is not None
+    if has_n == has_dt:
+        raise c.fail(
+            "prepare",
+            "set exactly one of n_timeslices (number of slices) and dt_step (time step"
+            " between slices, s)" + (", not both" if has_n else ""),
+        )
+    n_timeslices: int | None = None
+    dt_step: float | None = None
+    if has_n:
+        n_timeslices = c.integer(
+            prep["n_timeslices"], "prepare.n_timeslices", minimum=2
+        )
+    else:
+        dt_step = c.number(prep["dt_step"], "prepare.dt_step", positive=True)
     md_layout = c.choice(
         prep.get("md_layout", "separate"), "prepare.md_layout", ("separate", "combined")
     )
@@ -489,6 +512,11 @@ def load_pulse(path: Path) -> Pulse:
             metis["mode"] = c.choice(m["mode"], "prepare.metis.mode", METIS_MODES)
         if "nbt" in m:
             metis["nbt"] = c.integer(m["nbt"], "prepare.metis.nbt", minimum=2)
+        elif dt_step is not None:
+            raise c.fail(
+                "prepare.metis.nbt",
+                "required with prepare.dt_step (it defaults to n_timeslices)",
+            )
     dd_version = DEFAULT_DD_VERSION
     if prep.get("dd_version") is not None:
         dd_version = c.string(prep["dd_version"], "prepare.dd_version")
@@ -613,6 +641,7 @@ def load_pulse(path: Path) -> Pulse:
         machine_description=machine_description,
         md_name=md_name,
         n_timeslices=n_timeslices,
+        dt_step=dt_step,
         md_layout=md_layout,
         metis=metis,
         dd_version=dd_version,
@@ -669,7 +698,10 @@ def render_source_env(pulse: Pulse, mark: str) -> str:
         if k == "iron_core" and md[k] == _IRON_CORE_EMPTY:
             line += "   # empty for ITER"
         lines.append(line)
-    lines.append(f"N_TIMESLICES={pulse.n_timeslices}")
+    if pulse.dt_step is not None:
+        lines.append(f"DT_STEP={_yaml_value(pulse.dt_step)}")
+    else:
+        lines.append(f"N_TIMESLICES={pulse.n_timeslices}")
     if pulse.md_layout != "separate":
         lines.append(f"MD_LAYOUT={pulse.md_layout}")
     if pulse.metis is not None:
@@ -677,6 +709,11 @@ def render_source_env(pulse: Pulse, mark: str) -> str:
             lines.append(f"METIS_MODE={pulse.metis['mode']}")
         if "nbt" in pulse.metis:
             lines.append(f"METIS_NBT={pulse.metis['nbt']}")
+    lines.append(
+        "# simulation window (time.t_start/t_end), only for the preparation log"
+    )
+    lines.append(f"REPORT_T_START={_fmt_time(pulse.t_start)}")
+    lines.append(f"REPORT_T_END={_fmt_time(pulse.t_end)}")
     return "\n".join(lines) + "\n"
 
 

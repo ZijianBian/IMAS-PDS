@@ -56,10 +56,33 @@ def handle_args():
         help="URI to write the machine-description reference data to "
         "(defaults to --sink_uri, i.e. the same file as the DINA-derived data)",
     )
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument(
+        "--n_timeslices",
+        type=int,
+        help="Number of timeslices, uniform over the viable time range",
+    )
+    selection.add_argument(
+        "--dt_step",
+        type=float,
+        help="Time step [s] between selected timeslices: the first viable time, "
+        "+DT, +2 DT, ... up to the last viable time, each mapped to the nearest "
+        "viable raw sample",
+    )
     parser.add_argument(
-        "--n_timeslices", type=int, default=51, help="Number of timeslices"
+        "--report_window",
+        type=float,
+        nargs=2,
+        metavar=("T_START", "T_END"),
+        default=None,
+        help="Only for the log: also report how many selected slices fall inside "
+        "[T_START, T_END] and their spacing there",
     )
     args = parser.parse_args()
+    if args.n_timeslices is not None and args.n_timeslices < 2:
+        parser.error("--n_timeslices must be >= 2")
+    if args.dt_step is not None and not args.dt_step > 0:
+        parser.error("--dt_step must be > 0")
     if args.md_sink_uri is None:
         args.md_sink_uri = args.sink_uri
     return args
@@ -111,7 +134,15 @@ def main():
             else stack.enter_context(DBEntry(args.md_sink_uri, "w"))
         )
 
-        write_dina_data(db_out, db_in, db_sum, db_md_pf_active, args.n_timeslices)
+        write_dina_data(
+            db_out,
+            db_in,
+            db_sum,
+            db_md_pf_active,
+            n_timeslices=args.n_timeslices,
+            dt_step=args.dt_step,
+            report_window=args.report_window,
+        )
         write_machine_description_data(
             db_md_out,
             db_md_wall,

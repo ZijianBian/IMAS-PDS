@@ -42,7 +42,11 @@ preprocessing/prepare 105084 --metis      # also build data/metis_in (see METIS 
 `preprocessing/prepare <scenario>` reads `$SCENARIOS_REPO/<scenario>/source.env` and calls
 `preprocessing/dina2pds/convert_dina_data_to_input.py`, which:
 
-1. reads the DINA `summary` and selects `N_TIMESLICES` timeslices, uniformly in time;
+1. reads the DINA `summary` and selects the timeslices over the viable range (magnetic
+   axis R > 1 m and |Ip| > 50 kA), by exactly one of `N_TIMESLICES` (that many
+   timeslices, uniformly in time; converter option `--n_timeslices`) or `DT_STEP` (one
+   timeslice every `DT_STEP` seconds from the first viable time, each at the nearest
+   viable raw sample; `--dt_step`);
 2. copies `equilibrium`, `core_profiles` and `core_sources` at those slices into `data/in`,
    converting each to DD 4.0.0;
 3. merges DINA's per-slice coil currents onto machine-description geometry, also into
@@ -51,7 +55,17 @@ preprocessing/prepare 105084 --metis      # also build data/metis_in (see METIS 
 4. writes the static machine description — `pf_active`, `pf_passive`, `wall`, `iron_core`.
 
 Slices that are not viable are skipped and logged, so the result can hold fewer than
-`N_TIMESLICES` entries: 105084 asks for 41 and gets 40, 105073 gets 39.
+`N_TIMESLICES` entries: 105084 asks for 41 and gets 40, 105073 gets 39. A non-viable pick
+is replaced by the next viable raw sample (up to 10 ahead); when two picks reach the same
+raw time, that slice is written once and the duplicate is logged (105033 had a
+duplicated first slice before this check).
+
+The converter ends with one summary line (WARNING level, so it is always shown): the
+number of slices written, the selection method, the viable range and the slice spacing.
+When `REPORT_T_START` and `REPORT_T_END` are set in `source.env` (`bin/pds-configure`
+writes them from `time.t_start` / `time.t_end`), `prepare` passes them as
+`--report_window` and the line also gives the number of slices inside that simulation
+window and their spacing there. They are only reported; they do not change the data.
 
 The finished `data/` is left read-only: opening an IMAS entry even with mode "r" rewrites
 its `master.h5`, and several jobs reading one entry at once race on that write.
@@ -94,7 +108,14 @@ MD_PF_PASSIVE="imas:hdf5?path=/work/imas/shared/imasdb/ITER_MD/3/115005/3"
 MD_WALL="imas:hdf5?path=/work/imas/shared/imasdb/ITER_MD/3/116000/5"
 MD_IRON_CORE="empty"   # empty for ITER
 N_TIMESLICES=41
+# simulation window (time.t_start/t_end), only for the preparation log
+REPORT_T_START=2.4
+REPORT_T_END=280.4
 ```
+
+`N_TIMESLICES=41` can be replaced by `DT_STEP=1.0` (exactly one of the two; `prepare`
+stops with an error otherwise). With `--metis`, `METIS_NBT` defaults to `N_TIMESLICES`,
+so a `DT_STEP` scenario must set `METIS_NBT` (`prepare.metis.nbt`).
 
 ITER has no iron core: `MD_IRON_CORE="empty"` makes the converter create an empty static
 `iron_core` IDS (NICE takes an iron_core input, needed for WEST; give a real URI for such
@@ -233,7 +254,9 @@ and `--dt` set or override these values directly.
 It prints one `OK` or `WARN` line per check:
 
 - the machine-description files present in `data/in_md` (`WARN` if the directory is missing);
-- the number of prepared slices against `N_TIMESLICES` (`WARN` when fewer were written);
+- the number of prepared slices against `N_TIMESLICES` (`WARN` when fewer were written),
+  or, with `DT_STEP`, against the approximate count (viable range / `DT_STEP` + 1;
+  `WARN` when off by more than max(2, 10 %));
 - whether the prepared time array is strictly monotonic (`WARN` lists the violations, e.g. a
   duplicated first slice);
 - the prepared time window against the viable raw window (magnetic axis R > 1 m and

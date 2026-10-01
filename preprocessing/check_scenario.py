@@ -187,10 +187,35 @@ def main():
 
     n_expected = env.get("N_TIMESLICES")
     n_expected = int(n_expected) if n_expected is not None else None
+    dt_step = env.get("DT_STEP")
+    try:
+        dt_step = float(dt_step) if dt_step is not None else None
+    except ValueError:
+        print(f"WARN DT_STEP={dt_step!r} in source.env is not a number")
+        dt_step = None
     if t_sel is not None:
         n_prepared = len(t_sel)
-        status = "OK" if (n_expected is None or n_prepared == n_expected) else "WARN"
-        print(f"{status} prepared slices: {n_prepared} (N_TIMESLICES={n_expected})")
+        if dt_step is not None and dt_step > 0 and viable.any():
+            # One target every DT_STEP over the viable range; nearest-sample mapping,
+            # deduplication and skipped slices make the count only approximate.
+            span = float(t_raw[viable][-1] - t_raw[viable][0])
+            n_approx = math.floor(span / dt_step + 1e-9) + 1
+            tol = max(2, int(0.1 * n_approx))
+            status = "OK" if abs(n_prepared - n_approx) <= tol else "WARN"
+            print(
+                f"{status} prepared slices: {n_prepared} (DT_STEP={dt_step:g} s,"
+                f" expected ~{n_approx} = viable range {span:.3f} s / dt + 1)"
+            )
+        elif dt_step is not None:
+            print(
+                f"WARN prepared slices: {n_prepared} (DT_STEP={dt_step} s, no expected"
+                " count: no viable raw sample or DT_STEP <= 0)"
+            )
+        else:
+            status = (
+                "OK" if (n_expected is None or n_prepared == n_expected) else "WARN"
+            )
+            print(f"{status} prepared slices: {n_prepared} (N_TIMESLICES={n_expected})")
         if n_prepared > 1:
             diffs = np.diff(t_sel)
             bad = np.where(diffs <= 0)[0]

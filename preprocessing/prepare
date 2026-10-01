@@ -11,6 +11,12 @@
 # which writes $SCENARIOS_REPO/<shot>/source.env from the pulse file and then runs this
 # script. See preprocessing/README.md.
 #
+# source.env must define exactly one slice selection: N_TIMESLICES (that many slices,
+# uniform over the viable DINA time range) or DT_STEP (one slice every DT_STEP seconds
+# from the first viable time). Optional REPORT_T_START/REPORT_T_END (the simulation
+# window) only add the number of slices inside that window to the converter's summary
+# line; they change nothing in the data.
+#
 # Scenario data root: SCENARIOS_REPO, default <PDS repo>/scenarios (not committed). Point
 # it elsewhere, e.g. /work/projects/pds/pds-scenarios, to use another data root.
 #
@@ -50,9 +56,29 @@ export TOOLS
 # shellcheck source=/dev/null
 source "$DIR/source.env"
 
-for v in SOURCE_URI SUMMARY_URI MD_PF_ACTIVE MD_PF_PASSIVE MD_WALL MD_IRON_CORE N_TIMESLICES; do
+for v in SOURCE_URI SUMMARY_URI MD_PF_ACTIVE MD_PF_PASSIVE MD_WALL MD_IRON_CORE; do
   [[ -n "${!v:-}" ]] || { echo "prepare: $v unset in $DIR/source.env" >&2; exit 1; }
 done
+
+# Slice selection: exactly one of N_TIMESLICES and DT_STEP.
+if [[ -n "${N_TIMESLICES:-}" && -n "${DT_STEP:-}" ]]; then
+  echo "prepare: both N_TIMESLICES and DT_STEP set in $DIR/source.env; set exactly one" >&2; exit 1
+elif [[ -n "${N_TIMESLICES:-}" ]]; then
+  SLICES=(--n_timeslices "$N_TIMESLICES")
+elif [[ -n "${DT_STEP:-}" ]]; then
+  SLICES=(--dt_step "$DT_STEP")
+else
+  echo "prepare: neither N_TIMESLICES nor DT_STEP set in $DIR/source.env; set exactly one" >&2; exit 1
+fi
+# Optional simulation window, only reported in the converter's summary line.
+REPORT=()
+if [[ -n "${REPORT_T_START:-}" && -n "${REPORT_T_END:-}" ]]; then
+  REPORT=(--report_window "$REPORT_T_START" "$REPORT_T_END")
+fi
+# --metis: METIS_NBT defaults to N_TIMESLICES; a DT_STEP selection gives no slice count.
+if [[ $WANT_METIS -eq 1 && -z "${METIS_NBT:-}" && -z "${N_TIMESLICES:-}" ]]; then
+  echo "prepare: --metis with DT_STEP needs METIS_NBT (set prepare.metis.nbt in the pulse file)" >&2; exit 1
+fi
 
 # MD_LAYOUT decides whether the machine description lands in its own entry.
 #
@@ -89,7 +115,7 @@ CMD=("$PYTHON" "$TOOLS/dina2pds/convert_dina_data_to_input.py"
      --md_wall_uri       "$MD_WALL"
      --md_iron_core_uri  "$MD_IRON_CORE"
      --sink_uri          "imas:hdf5?path=$DIR/data/in"
-     --n_timeslices      "$N_TIMESLICES")
+     "${SLICES[@]}" "${REPORT[@]}")
 if [[ "$MD_LAYOUT" == "separate" ]]; then
   CMD+=(--md_sink_uri "imas:hdf5?path=$DIR/data/in_md")
 fi
