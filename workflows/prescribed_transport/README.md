@@ -36,7 +36,7 @@ Scenarios available: 105078, 105084, 105092, 105099.
 
 Only the input DBEntry (`data/in`, `data/in_md`) is read live from `pds-scenarios`; the
 pulse design (`waveforms_no_transport.yaml`) lives in this workflow's own directory, so it's
-versioned and editable here. See [`preprocessing/README.md`](../../preprocessing/README.md) for how `data/` itself is
+versioned and editable here. See `preprocessing/README.md` for how `data/` itself is
 produced from DINA and machine-description sources.
 
 ## Assumptions

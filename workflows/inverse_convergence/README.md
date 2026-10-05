@@ -54,7 +54,7 @@ Only the input DBEntry (`data/in`, `data/in_md`) is read live from `pds-scenario
 pulse design (`waveforms.yaml`) lives in this workflow's own directory, and any per-shot
 variant or calibrated solver config is declared in the shot's pulse file
 (`cases/pulses/<shot>.yaml`, companion files under `cases/pulses/files/`), so both are
-versioned and editable here. See [`preprocessing/README.md`](../../preprocessing/README.md) for how `data/` itself is produced
+versioned and editable here. See `preprocessing/README.md` for how `data/` itself is produced
 from DINA and machine-description sources.
 
 ## Assumptions
