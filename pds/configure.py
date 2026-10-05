@@ -1,26 +1,42 @@
 """Generate every shot-specific PDS input from one pulse file.
 
-A pulse file ``cases/pulses/<shot>.yaml`` is the single place where everything that is
-specific to one shot is set: the DINA and machine-description inputs used to prepare the
-scenario data, the simulated time window, the time steps, an optional TORAX transport
-calibration and the post-processing plot times. ``bin/pds-configure`` reads it and writes
-the tool-specific files derived from it; everything else stays generic in
-``workflows/<wf>/``. ``cases/pulses/TEMPLATE.yaml`` is a commented starting point.
+Two configuration layers only: ``workflows/<wf>/settings.ymmsl`` holds the generic
+defaults of a workflow, and the pulse file ``cases/pulses/<case>.yaml`` holds everything
+that is specific to one shot -- the DINA and machine-description inputs used to prepare
+the scenario data, the simulated time window, the time steps, an optional TORAX transport
+calibration, the post-processing plot times, and arbitrary setting overrides
+(``settings:``). ``bin/pds-configure`` reads it and writes the tool-specific files
+derived from it; ``bin/pds-create-case`` regenerates the per-workflow override from the
+pulse file by itself. ``cases/overrides/`` is a generated, git-ignored cache; hand-written
+override files are no longer supported. ``cases/pulses/TEMPLATE.yaml`` is a commented
+starting point.
 
 Pulse file keys
 ---------------
 
 ``shot`` (int, required)
-    Shot / scenario number: the directory ``$SCENARIOS_REPO/<shot>`` and the ``<shot>``
-    in every generated file name.
+    Shot / scenario number: the directory ``$SCENARIOS_REPO/<shot>`` holding the
+    prepared data, and the ``${SHOT}`` of the workflow settings.
+``case`` (str, default: the shot)
+    Case name: the ``<case>`` of ``cases/overrides/<wf>_<case>.ymmsl``,
+    ``cases/<wf>_<case>/`` and the second argument of ``bin/pds-create-case <wf> <case>``
+    (which looks the pulse file up as ``cases/pulses/<case>.yaml``, so name the file after
+    the case). Use it for a second design of the same shot's data, e.g. ``105084_literal``.
+    When the case differs from the shot, every setting of the workflow's
+    ``settings.ymmsl`` whose value contains ``${SHOT}`` is written explicitly into the
+    override with the real shot number (``bin/pds-create-case`` substitutes ``${SHOT}``
+    with its second argument, the case name), and every config file of that
+    ``settings.ymmsl`` containing ``${SHOT}`` (e.g. the generic waveforms.yaml) must be
+    replaced through ``settings:``.
 ``description`` (str, optional)
     Free text, copied as a comment into the generated files.
 ``workflows`` (list, required)
     Workflows this pulse is run with. Supported: ``inverse_convergence``,
     ``prescribed_transport``, ``evolutive_controller``, ``metis_from_dina``,
-    ``metis_nice_inverse_from_dina``. One override file is generated per workflow.
-    ``[]`` (empty) means preparation only: only ``source.env`` is written and
-    ``--create`` does nothing.
+    ``metis_nice_inverse_from_dina``. One override file is generated per workflow; a
+    workflow left out gets none (``bin/pds-create-case`` then uses the workflow's generic
+    settings only, which is the same as an empty override). ``[]`` (empty) means
+    preparation only: only ``source.env`` is written and ``--create`` does nothing.
 ``prepare`` (mapping, required) -> ``$SCENARIOS_REPO/<shot>/source.env``, the input of
 ``preprocessing/prepare``:
 
@@ -49,11 +65,14 @@ Pulse file keys
         also written as ``REPORT_T_START`` / ``REPORT_T_END``, used only by the
         preparation log (slices inside the simulation window).
     ``md_layout`` (``separate`` | ``combined``, default ``separate``) -> ``MD_LAYOUT``.
-        inverse_convergence and prescribed_transport read ``data/in_md`` and therefore
-        need ``separate``; ``combined`` with those workflows is rejected (such a shot
-        needs hand-written overrides, see ``cases/overrides/inverse_convergence_105073*``).
-        The two METIS workflows do not read ``data/``: their preprocess.sh builds their
-        inputs from ``source.env`` at ``--create``, so they accept either layout.
+        inverse_convergence and prescribed_transport read ``data/in_md`` by default and
+        therefore need ``separate``; with ``combined`` every setting of their
+        ``settings.ymmsl`` that reads ``data/in_md`` (directly, or through a referenced
+        config file such as the generic waveforms.yaml) must be replaced through
+        ``settings:`` (see ``cases/pulses/105073.yaml``), otherwise the workflow is
+        rejected. The two METIS workflows do not read ``data/``: their preprocess.sh
+        builds their inputs from ``source.env`` at ``--create``, so they accept either
+        layout.
     ``metis`` (mapping, optional) with ``mode`` (``interpretative`` | ``predictive``)
         -> ``METIS_MODE`` and ``nbt`` (int) -> ``METIS_NBT``; written only if present,
         and ``--prepare`` then passes ``--metis`` to preprocessing/prepare.
@@ -77,16 +96,22 @@ Pulse file keys
         In metis_nice_inverse_from_dina, ``source_nice`` is a ``sink_source_component``
         that has no ``t_min``/``t_max``: it re-slices its input at the timestamp of each
         METIS equilibrium it receives, so the window reaches it through METIS.
-    ``transport_dt`` (float > 0, optional) -> inverse_convergence
-        ``transport.torax.fixed_dt``, the TORAX step inside each outer slice interval.
+    ``inverse_dt`` (float > 0, optional) -> inverse_convergence
+        ``transport.torax.fixed_dt``, the TORAX step inside each outer slice interval
+        (the last step is shortened to land on the next slice). Formerly
+        ``transport_dt``; that key is rejected with a rename message.
     ``forward_dt`` (float > 0, optional) -> evolutive_controller ``torax.fixed_dt``,
         ``nice_evo_rd.dt`` and ``nice_evo_rd.t_interval``.
     ``forward_source_dt`` (float > 0, optional) -> evolutive_controller ``source.dt``,
         the resampling step of the input data.
     ``forward_t_start``, ``forward_t_end`` (float, default ``t_start`` / ``t_end``,
         ``forward_t_end > forward_t_start``) -- evolutive_controller forward window:
-        ``source.t_min`` / ``source.t_max``; ``forward_t_end`` also sets
-        ``torax.t_final`` and ``nice_evo_rd.t_end``.
+        ``source.t_min`` and the end of the forward simulation, ``torax.t_final`` and
+        ``nice_evo_rd.t_end``.
+    ``forward_load_t_end`` (float, default ``forward_t_end``, ``>= forward_t_end``) ->
+        evolutive_controller ``source.t_max``, the end of the time range the source
+        loads; set it above ``forward_t_end`` to load more of the inverse result than
+        is simulated (105084 loads 136..256 s and simulates to 136.6 s).
     ``forward_source`` (str, optional) -> evolutive_controller ``source.source_uri``,
         the inverse result the forward run starts from. Default (not written): the
         workflow's ``imas:hdf5?path=${PDS_REPO}/cases/runs/inverse_convergence_${SHOT}/
@@ -96,10 +121,11 @@ Pulse file keys
     ``--dry-run`` included, before anything is written) the effective source is
     resolved (``$PDS_REPO``/``$SHOT`` expanded). For an existing local
     ``imas:hdf5?path=`` entry its ``equilibrium.time`` is read (read-only, lazy): a
-    window outside it (tolerance 1e-6 s) is an error; otherwise the first native slice
-    of the window is logged, with a warning if ``forward_t_start`` is not a native slice
-    (a non-native start diverged on 105073). A non-HDF5 or not-yet-existing source only
-    gets a warning: rerun after the inverse_convergence run for a hard check.
+    window outside it (tolerance 1e-6 s) is an error (a ``forward_load_t_end`` beyond
+    it only a warning); otherwise the first native slice of the window is logged, with
+    a warning if ``forward_t_start`` is not a native slice (a non-native start diverged
+    on 105073). A non-HDF5 or not-yet-existing source only gets a warning: rerun after
+    the inverse_convergence run for a hard check.
 
 ``inverse_convergence`` (mapping, optional) -> ``loop.<key>`` of inverse_convergence:
     ``max_iterations`` (int >= 1), ``tolerance`` (float > 0), ``rel_tolerance``
@@ -107,7 +133,7 @@ Pulse file keys
     keep the workflow defaults of ``workflows/inverse_convergence/settings.ymmsl``.
 
 ``transport_calibration`` (mapping, optional). Omit it to keep the workflow's generic
-qlknn transport. When present, a calibrated ``<wf>_<shot>_config_torax.py`` is generated
+qlknn transport. When present, a calibrated ``<wf>_<case>_config_torax.py`` is generated
 for each selected workflow with TORAX (inverse_convergence, evolutive_controller; not
 prescribed_transport and the METIS workflows, which have no TORAX): the
 workflow's generic ``config_torax.py`` verbatim, followed by assignments that switch
@@ -123,6 +149,24 @@ workflow's generic ``config_torax.py`` verbatim, followed by assignments that sw
     values > 0), piecewise-linear in time and constant outside the given range. A
     multiplier left unset keeps the TORAX default 1.0.
 
+``settings`` (mapping, optional) -- pass-through of arbitrary MUSCLE3 settings:
+``<workflow>: {<instance>.<setting>: value, ...}``. Each workflow named here must be in
+``workflows``. Values are scalars (int, float, bool, str) or lists of scalars; strings
+may contain ``${PDS_REPO}``, ``${SCENARIOS_REPO}``, ``${SHOT}`` and ``${CASE_DIR}``
+literally (``bin/pds-create-case`` substitutes them). They are written at the end of the
+workflow's override, under ``# settings: pass-through from the pulse file``, so they win
+over the workflow's ``settings.ymmsl``. Checks: a key must start with the name of an
+instance of the workflow (``workflows/<wf>/workflow.ymmsl``, nested models included,
+e.g. ``equilibrium.nice.xml_path`` or ``equilibrium.xml_path``; libmuscle resolves a
+setting through the instance's prefixes), or already appear in the workflow's
+``settings.ymmsl``, or be a MUSCLE3 reserved setting (``muscle_*``); a key that one of
+the keys above controls (e.g. ``loop.t_min`` from ``time.t_start``) is an error naming
+that key. Config files of your own (a waveform design, a NICE xml, a TORAX config) go to
+``cases/pulses/files/`` (tracked) and are referenced as
+``${PDS_REPO}/cases/pulses/files/<name>``; ``bin/pds-create-case`` freezes a copy of
+every ``*.xml_path`` / ``*.python_config_module`` / ``*.config`` / ``*.waveforms`` file
+into the case's ``config/``.
+
 ``postprocess`` (mapping, optional):
     ``t_list`` (list of numbers) -- plot times of the validation plots
     (``workflows/inverse_convergence/postprocess.sh``). Default: 25/50/75 % of
@@ -133,46 +177,37 @@ Unknown keys and wrong types are errors.
 Failures
 --------
 
-Pulse-file errors (unknown keys, wrong types, a ``--workflow`` not listed) and failures
-common to all workflows (``source.env``, ``--prepare``) are fatal at once. A failure of
-one workflow -- generating its override, its check (e.g. the evolutive_controller
-forward-window check), the overwrite guard of its files, or its ``pds-create-case`` --
-is reported, that workflow is skipped and the others continue; the command then exits
-with code 1 and a final ``failed workflows:`` summary line.
+Pulse-file errors (unknown keys, wrong types, invalid ``settings`` keys, a ``--workflow``
+not listed) and failures common to all workflows (``source.env``, ``--prepare``) are
+fatal at once. A failure of one workflow -- generating its override, its check (e.g. the
+evolutive_controller forward-window check), the overwrite guard of its files, or its
+``pds-create-case`` -- is reported, that workflow is skipped and the others continue;
+the command then exits with code 1 and a final ``failed workflows:`` summary line.
 
 Generated files
 ---------------
 
-* ``$SCENARIOS_REPO/<shot>/source.env``
-* ``$PDS_REPO/cases/overrides/generated/<wf>_<shot>.ymmsl`` for each workflow, stacked
-  after the generic ``workflows/<wf>/settings.ymmsl`` by ``bin/pds-create-case``
-* ``$PDS_REPO/cases/overrides/generated/<wf>_<shot>_config_torax.py`` if
-  ``transport_calibration``
+* ``$SCENARIOS_REPO/<shot>/source.env`` (not with ``--overrides-only``)
+* ``$PDS_REPO/cases/overrides/<wf>_<case>.ymmsl`` for each workflow, stacked after the
+  generic ``workflows/<wf>/settings.ymmsl`` by ``bin/pds-create-case``
+* ``$PDS_REPO/cases/overrides/<wf>_<case>_config_torax.py`` if ``transport_calibration``
 * with ``--create``: ``export SCENARIOS_REPO=<data root>`` appended to each new
-  ``<case>/case.env``, which bin/pds-run-case.sbatch sources before post-processing
+  ``<case>/case.env``, which bin/pds-run-case.sbatch sources before post-processing, and
+  ``<case>/settings_origin.txt``, the ``--explain`` table of that case
 
-``cases/overrides/generated/`` is git-ignored: generated files are never committed.
-Each file starts with a ``# GENERATED by bin/pds-configure`` marker line. An existing
-target without that marker is never overwritten unless ``--force``.
+``cases/overrides/`` is a git-ignored cache (only its README is tracked): generated
+files are never committed, ``bin/pds-configure`` and ``bin/pds-create-case`` rebuild
+them from the pulse file. Each file starts with a ``# GENERATED by bin/pds-configure``
+marker line. A ``cases/overrides/<wf>_<case>.ymmsl`` without that marker is a
+hand-written override: those are no longer supported, both commands refuse it -- move
+its settings into the pulse file (``settings:`` section) and delete it (or ``--force``
+to overwrite it).
 
-Override precedence
--------------------
-
-``bin/pds-create-case <wf> <shot>`` uses the first of:
-
-1. the hand-written ``cases/overrides/<wf>_<shot>.ymmsl``;
-2. the generated ``cases/overrides/generated/<wf>_<shot>.ymmsl``;
-3. none (the workflow's generic settings only).
-
-Precedence is per whole file: the two are never merged. A hand-written override
-therefore silently shadows the generated one, and this command warns when it finds one
-(the legacy shots 105073/78/84/92/99 have hand-written overrides, which always win).
-
-To customise a generated override: copy ``cases/overrides/generated/<wf>_<shot>.ymmsl``
-to ``cases/overrides/``, delete its first (marker) line and edit it; if it references a
-generated ``<wf>_<shot>_config_torax.py``, copy that file to ``cases/overrides/`` too and
-change the ``python_config_module`` path to the copy. From then on the pulse file no
-longer affects that workflow/shot: changes to it must be carried over by hand.
+``bin/pds-create-case <wf> <case>`` runs ``pds/configure.py cases/pulses/<case>.yaml
+--overrides-only --workflow <wf>`` itself when that pulse file exists (unless
+``PDS_CONFIGURE_NO_REGEN`` is set, which ``--create`` sets for the child it spawns), so
+the override is always up to date with the pulse file; a workflow not listed in the
+pulse file gets no override (a stale generated one is removed).
 
 Command line
 ------------
@@ -180,19 +215,29 @@ Command line
 ::
 
     bin/pds-configure <pulse.yaml> [--workflow WF ...] [--prepare] [--create]
-                      [--force] [--dry-run] [--print-t-list]
+                      [--overrides-only] [--force] [--dry-run] [--print-t-list]
+                      [--explain [WF]] [--overlay FILE ...]
 
 Without options, writes the files above. ``--workflow`` restricts to a subset of
-``workflows``. ``--dry-run`` prints paths and contents (and the commands ``--prepare`` /
-``--create`` would run) without doing anything. ``--prepare`` then runs
-``$PDS_REPO/preprocessing/prepare <shot>`` (plus ``--metis`` if ``prepare.metis`` is
-set) with this interpreter as ``PREPARE_PYTHON`` (the IMAS-MUSCLE3 environment has
-everything preprocessing/prepare needs) and ``IMAS_VERSION`` = ``prepare.dd_version``.
-``--create`` then runs ``bin/pds-create-case -f <wf> <shot>`` for each selected
-workflow, appends ``export SCENARIOS_REPO=...`` to the new case's ``case.env``, and runs
-``preprocessing/check_scenario.py`` on the new case (figure ``<case>/check_<shot>.png``),
-printing its OK/WARN lines (a failing check is reported, not fatal).
-``--print-t-list`` prints the post-processing plot times, space separated, and exits.
+``workflows``. ``--overrides-only`` writes the overrides only, never source.env (used by
+``bin/pds-create-case``; with it a ``--workflow`` not listed in the pulse file is not an
+error: nothing is generated and a stale generated override is removed). ``--dry-run``
+prints paths and contents (and the commands ``--prepare`` / ``--create`` would run)
+without doing anything. ``--prepare`` then runs ``$PDS_REPO/preprocessing/prepare
+<shot>`` (plus ``--metis`` if ``prepare.metis`` is set) with this interpreter as
+``PREPARE_PYTHON`` (the IMAS-MUSCLE3 environment has everything preprocessing/prepare
+needs) and ``IMAS_VERSION`` = ``prepare.dd_version``. ``--create`` then runs
+``bin/pds-create-case -f <wf> <case>`` for each selected workflow, appends ``export
+SCENARIOS_REPO=...`` to the new case's ``case.env``, writes ``settings_origin.txt``, and
+runs ``preprocessing/check_scenario.py`` on the new case (figure
+``<case>/check_<shot>.png``), printing its OK/WARN lines (a failing check is reported,
+not fatal). ``--print-t-list`` prints the post-processing plot times, space separated,
+and exits. ``--explain [WF]`` prints, for each selected workflow (or only WF), a table
+``setting | value | origin`` of every effective setting of the case -- origin being the
+workflow's ``workflow.ymmsl``, its ``settings.ymmsl``, the pulse key that produced it
+(``pulse: time.t_start``, ``pulse: settings pass-through``, ``pulse: case name``) or an
+``--overlay FILE`` (repeatable, stacked last like the overlays of ``bin/pds-run-case``)
+-- and exits; values are shown raw, ``${...}`` unsubstituted.
 
 Environment: ``PDS_REPO`` (default: the checkout containing this package),
 ``SCENARIOS_REPO`` (the scenario data root; default ``$PDS_REPO/scenarios``, which is
@@ -218,6 +263,19 @@ import yaml
 logger = logging.getLogger("pds-configure")
 
 MARKER_PREFIX = "# GENERATED by bin/pds-configure from "
+# Suffixes of the settings whose value is a config file that bin/pds-create-case copies
+# into the case's config/ (its CONFIG_KEY_RE).
+CONFIG_KEY_SUFFIXES = ("xml_path", "python_config_module", "config", "waveforms")
+RESERVED_SETTING_PREFIX = "muscle_"  # MUSCLE3 reserved settings (muscle_*)
+CASE_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+SETTING_KEY_RE = re.compile(
+    r"[A-Za-z_][A-Za-z0-9_]*(\[[0-9]+\])?(\.[A-Za-z_][A-Za-z0-9_]*(\[[0-9]+\])?)*"
+)
+# Origins shown by --explain.
+ORIGIN_WORKFLOW = "workflow.ymmsl"
+ORIGIN_SETTINGS = "workflow settings.ymmsl"
+ORIGIN_PASS_THROUGH = "pulse: settings pass-through"
+ORIGIN_CASE_NAME = "pulse: case name"
 # Default evolutive_controller source (workflows/evolutive_controller/settings.ymmsl):
 # the NICE inverse output of the latest inverse_convergence run of the same shot.
 FORWARD_SOURCE_DEFAULT = (
@@ -301,6 +359,7 @@ class Pulse:
 
     path: Path
     shot: int
+    case: str
     description: str | None
     workflows: list[str]
     source: str
@@ -313,13 +372,15 @@ class Pulse:
     dd_version: str
     t_start: float
     t_end: float
-    transport_dt: float | None
+    inverse_dt: float | None
     forward_dt: float | None
     forward_source_dt: float | None
     forward_t_start: float
     forward_t_end: float
     forward_source: str | None
+    forward_load_t_end: float = 0.0
     dt_step: float | None = None
+    settings: dict[str, dict[str, Any]] = field(default_factory=dict)
     loop: dict[str, Any] = field(default_factory=dict)
     calibration_model: str | None = None
     multipliers: dict[str, Table] = field(default_factory=dict)
@@ -413,6 +474,21 @@ class _Checker:
         return result
 
 
+def _setting_value(c: _Checker, value: object, key: str) -> Any:
+    """A pass-through setting value: a scalar or a list of scalars."""
+    if isinstance(value, bool | int | float | str):
+        return value
+    if isinstance(value, list):
+        for i, item in enumerate(value):
+            if not isinstance(item, bool | int | float | str):
+                raise c.fail(
+                    f"{key}[{i}]",
+                    f"expected a scalar (int, float, bool, str), got {item!r}",
+                )
+        return list(value)
+    raise c.fail(key, f"expected a scalar or a list of scalars, got {value!r}")
+
+
 def load_pulse(path: Path) -> Pulse:
     """Read and strictly validate a pulse file."""
     try:
@@ -427,19 +503,32 @@ def load_pulse(path: Path) -> Pulse:
         "",
         (
             "shot",
+            "case",
             "description",
             "workflows",
             "prepare",
             "time",
             "inverse_convergence",
             "transport_calibration",
+            "settings",
             "postprocess",
         ),
         ("shot", "workflows", "prepare", "time"),
     )
     shot = c.integer(top["shot"], "shot", minimum=0)
-    if path.stem.isdigit() and int(path.stem) != shot:
-        logger.warning("%s: shot %d does not match the file name", path, shot)
+    case = str(shot)
+    if top.get("case") is not None:
+        case = c.string(top["case"], "case")
+        if not CASE_NAME_RE.fullmatch(case):
+            raise c.fail("case", f"expected a name like 105084_literal, got {case!r}")
+    if path.stem != case:
+        logger.warning(
+            "%s: the file is not named after the case (%s): bin/pds-create-case looks "
+            "the pulse file up as cases/pulses/%s.yaml",
+            path,
+            case,
+            case,
+        )
     description = None
     if top.get("description") is not None:
         description = c.string(top["description"], "description")
@@ -526,17 +615,24 @@ def load_pulse(path: Path) -> Pulse:
                 f"expected a version like '4.0.0', got {dd_version!r}",
             )
 
+    if isinstance(top["time"], dict) and "transport_dt" in top["time"]:
+        raise c.fail(
+            "time.transport_dt",
+            "time.transport_dt was renamed to time.inverse_dt "
+            "(TORAX step inside inverse_convergence)",
+        )
     tm = c.mapping(
         top["time"],
         "time",
         (
             "t_start",
             "t_end",
-            "transport_dt",
+            "inverse_dt",
             "forward_dt",
             "forward_source_dt",
             "forward_t_start",
             "forward_t_end",
+            "forward_load_t_end",
             "forward_source",
         ),
         ("t_start", "t_end"),
@@ -546,7 +642,7 @@ def load_pulse(path: Path) -> Pulse:
     if t_end <= t_start:
         raise c.fail("time.t_end", f"must be > time.t_start ({t_end} <= {t_start})")
     steps: dict[str, float | None] = {}
-    for k in ("transport_dt", "forward_dt", "forward_source_dt"):
+    for k in ("inverse_dt", "forward_dt", "forward_source_dt"):
         steps[k] = None
         if tm.get(k) is not None:
             steps[k] = c.number(tm[k], f"time.{k}", positive=True)
@@ -560,6 +656,16 @@ def load_pulse(path: Path) -> Pulse:
         raise c.fail(
             "time.forward_t_end",
             f"must be > time.forward_t_start ({forward_t_end} <= {forward_t_start})",
+        )
+    forward_load_t_end = forward_t_end
+    if tm.get("forward_load_t_end") is not None:
+        forward_load_t_end = c.number(
+            tm["forward_load_t_end"], "time.forward_load_t_end"
+        )
+    if forward_load_t_end < forward_t_end:
+        raise c.fail(
+            "time.forward_load_t_end",
+            f"must be >= time.forward_t_end ({forward_load_t_end} < {forward_t_end})",
         )
     forward_source: str | None = None
     if tm.get("forward_source") is not None:
@@ -611,6 +717,26 @@ def load_pulse(path: Path) -> Pulse:
             elif common is not None:
                 multipliers[k] = common
 
+    settings: dict[str, dict[str, Any]] = {}
+    if top.get("settings") is not None:
+        st = c.mapping(top["settings"], "settings", tuple(SUPPORTED_WORKFLOWS))
+        for wf, raw_items in st.items():
+            if wf not in workflows:
+                raise c.fail(
+                    f"settings.{wf}",
+                    f"{wf} is not in workflows ({', '.join(workflows) or 'empty'})",
+                )
+            if not isinstance(raw_items, dict):
+                raise c.fail(f"settings.{wf}", "expected a mapping of <setting>: value")
+            settings[wf] = {}
+            for key, value in raw_items.items():
+                where = f"settings.{wf}.{key}"
+                if not isinstance(key, str) or not SETTING_KEY_RE.fullmatch(key):
+                    raise c.fail(
+                        where, "expected a setting name like <instance>.<setting>"
+                    )
+                settings[wf][key] = _setting_value(c, value, where)
+
     if top.get("postprocess") is not None:
         pp = c.mapping(top["postprocess"], "postprocess", ("t_list",))
     else:
@@ -634,6 +760,7 @@ def load_pulse(path: Path) -> Pulse:
     return Pulse(
         path=path,
         shot=shot,
+        case=case,
         description=description,
         workflows=workflows,
         source=source,
@@ -647,12 +774,14 @@ def load_pulse(path: Path) -> Pulse:
         dd_version=dd_version,
         t_start=t_start,
         t_end=t_end,
-        transport_dt=steps["transport_dt"],
+        inverse_dt=steps["inverse_dt"],
         forward_dt=steps["forward_dt"],
         forward_source_dt=steps["forward_source_dt"],
         forward_t_start=forward_t_start,
         forward_t_end=forward_t_end,
+        forward_load_t_end=forward_load_t_end,
         forward_source=forward_source,
+        settings=settings,
         loop=loop,
         calibration_model=calibration_model,
         multipliers=multipliers,
@@ -725,141 +854,357 @@ def _yaml_value(value: object) -> str:
     return str(value)
 
 
-def torax_config_name(wf: str, shot: int) -> str:
-    return f"{wf}_{shot}_config_torax.py"
+def torax_config_name(wf: str, case: str) -> str:
+    return f"{wf}_{case}_config_torax.py"
 
 
-def render_override(pulse: Pulse, wf: str, mark: str) -> str:
-    """cases/overrides/generated/<wf>_<shot>.ymmsl."""
-    if pulse.md_layout == "combined" and wf in SEPARATE_MD_WORKFLOWS:
+def _yaml_scalar(value: object) -> str:
+    """One scalar as a YAML value: plain when it reads back unchanged, else quoted."""
+    if isinstance(value, bool | int | float):
+        return _yaml_value(value)
+    text = str(value)
+    try:
+        plain = yaml.safe_load(text) == text and "\n" not in text
+    except yaml.YAMLError:
+        plain = False
+    # pds-create-case localizes config paths with a line regex that takes the rest of
+    # the line verbatim, so a plain (unquoted) path is required there; json.dumps gives
+    # a valid YAML double-quoted scalar for everything else.
+    return (
+        text
+        if plain and not text.startswith(("#", " ", "!", "&", "*"))
+        else json.dumps(text)
+    )
+
+
+def _yaml_setting(value: object) -> str:
+    if isinstance(value, list):
+        items = [json.dumps(v) if isinstance(v, str) else _yaml_value(v) for v in value]
+        return "[" + ", ".join(items) + "]"
+    return _yaml_scalar(value)
+
+
+@dataclass
+class Entry:
+    """One setting of a generated override, with the pulse key it comes from."""
+
+    key: str
+    value: object
+    origin: str
+
+
+def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+    try:
+        raw = yaml.safe_load(path.read_text())
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"{path}: invalid YAML: {exc}") from exc
+    return raw if isinstance(raw, dict) else {}
+
+
+def workflow_instances(pds_repo: Path, wf: str) -> list[str]:
+    """Instance paths of a workflow (``workflows/<wf>/workflow.ymmsl``), nested models
+    flattened the way muscle_manager does (``equilibrium.nice``, ``transport.torax``)."""
+    raw = _load_yaml_mapping(pds_repo / "workflows" / wf / "workflow.ymmsl")
+    models: dict[str, dict[str, Any]] = {}
+    if isinstance(raw.get("models"), dict):
+        models = raw["models"]
+    elif isinstance(raw.get("model"), dict):
+        models = {str(raw["model"].get("name", wf)): raw["model"]}
+
+    def components(model: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+        comps = model.get("components") or {}
+        if isinstance(comps, dict):
+            return [(str(k), v or {}) for k, v in comps.items()]
+        return [(str(c.get("name")), c) for c in comps if isinstance(c, dict)]
+
+    used = {
+        str(comp.get("implementation"))
+        for model in models.values()
+        for _, comp in components(model)
+    }
+    roots = [name for name in models if name not in used]
+    root = wf if wf in models else (roots[0] if len(roots) == 1 else None)
+    if root is None:
         raise ConfigError(
-            f"{pulse.path}: prepare.md_layout is 'combined' but workflow {wf} reads "
-            "data/in + data/in_md (the separate layout); a combined-layout shot needs "
-            "hand-written overrides for it (see cases/overrides/inverse_convergence_"
-            "105073*), so it cannot be generated"
+            f"workflows/{wf}/workflow.ymmsl: cannot find the root model "
+            f"(models: {', '.join(models) or 'none'})"
         )
-    groups: list[tuple[str, list[tuple[str, object]]]] = []
+    out: list[str] = []
+
+    def walk(model: dict[str, Any], prefix: str) -> None:
+        for name, comp in components(model):
+            path = f"{prefix}{name}"
+            impl = str(comp.get("implementation"))
+            if impl in models:
+                walk(models[impl], f"{path}.")
+            else:
+                out.append(path)
+
+    walk(models[root], "")
+    return out
+
+
+def workflow_settings(pds_repo: Path, wf: str) -> dict[str, Any]:
+    """The ``settings:`` of ``workflows/<wf>/settings.ymmsl`` (raw, ${...} kept)."""
+    path = pds_repo / "workflows" / wf / "settings.ymmsl"
+    if not path.is_file():
+        return {}
+    raw = _load_yaml_mapping(path).get("settings") or {}
+    return {str(k): v for k, v in raw.items()} if isinstance(raw, dict) else {}
+
+
+def _is_config_key(key: str) -> bool:
+    return key.rsplit(".", 1)[-1] in CONFIG_KEY_SUFFIXES and "." in key
+
+
+def _referenced_text(pds_repo: Path, key: str, value: object) -> str:
+    """Content of the config file a ``*.xml_path``-like setting points at, else ''."""
+    if not _is_config_key(key) or not isinstance(value, str):
+        return ""
+    path = Path(value.replace("${PDS_REPO}", str(pds_repo)))
+    try:
+        return path.read_text() if path.is_file() else ""
+    except OSError:
+        return ""
+
+
+def _setting_prefixes(instances: list[str]) -> set[str]:
+    """Every instance path and every ancestor path (``equilibrium`` for
+    ``equilibrium.nice``): libmuscle resolves ``<prefix>.<setting>`` for all of them."""
+    prefixes: set[str] = set()
+    for inst in instances:
+        parts = inst.split(".")
+        prefixes.update(".".join(parts[:i]) for i in range(1, len(parts) + 1))
+    return prefixes
+
+
+def check_settings(pulse: Pulse, pds_repo: Path) -> None:
+    """Validate the ``settings:`` pass-through against the workflows' definitions."""
+    for wf, items in pulse.settings.items():
+        instances = workflow_instances(pds_repo, wf)
+        prefixes = _setting_prefixes(instances)
+        generic = workflow_settings(pds_repo, wf)
+        generated = {
+            e.key: e.origin
+            for e in generated_entries(pulse, wf)
+            if e.origin != ORIGIN_CASE_NAME
+        }
+        for key in items:
+            where = f"{pulse.path}: settings.{wf}.{key}"
+            if key in generated:
+                raise ConfigError(
+                    f"{where}: this setting is controlled by the pulse key "
+                    f"{generated[key].removeprefix('pulse: ')}; set that key instead"
+                )
+            if key.startswith(RESERVED_SETTING_PREFIX) or key in generic:
+                continue
+            parts = key.split(".")
+            if not any(".".join(parts[:i]) in prefixes for i in range(1, len(parts))):
+                raise ConfigError(
+                    f"{where}: not a setting of an instance of {wf} (instances: "
+                    f"{', '.join(instances)}) nor a key of workflows/{wf}/"
+                    "settings.ymmsl nor a MUSCLE3 reserved muscle_* setting"
+                )
+
+
+def _shot_dependent(pulse: Pulse, pds_repo: Path, wf: str) -> list[Entry]:
+    """With case != shot: the settings.ymmsl values containing ${SHOT}, made explicit."""
+    if pulse.case == str(pulse.shot):
+        return []
+    passed = pulse.settings.get(wf, {})
+    out: list[Entry] = []
+    for key, value in workflow_settings(pds_repo, wf).items():
+        if key in passed or not isinstance(value, str):
+            continue
+        if "${SHOT}" in value:
+            out.append(
+                Entry(key, value.replace("${SHOT}", str(pulse.shot)), ORIGIN_CASE_NAME)
+            )
+        elif "${SHOT}" in _referenced_text(pds_repo, key, value):
+            raise ConfigError(
+                f"{pulse.path}: case {pulse.case} differs from shot {pulse.shot}, but "
+                f"the config file of {wf} setting {key} ({value}) contains ${{SHOT}}, "
+                "which bin/pds-create-case replaces with the case name; replace it "
+                f"through settings.{wf}.{key} (a copy under cases/pulses/files/ with "
+                "the shot number written in)"
+            )
+    return out
+
+
+def _check_combined_layout(pulse: Pulse, pds_repo: Path, wf: str) -> None:
+    """A combined-layout shot must redirect every data/in_md read of the workflow."""
+    if pulse.md_layout != "combined" or wf not in SEPARATE_MD_WORKFLOWS:
+        return
+    passed = pulse.settings.get(wf, {})
+    for key, value in workflow_settings(pds_repo, wf).items():
+        if key in passed or not isinstance(value, str):
+            continue
+        if "data/in_md" in value or "data/in_md" in _referenced_text(
+            pds_repo, key, value
+        ):
+            raise ConfigError(
+                f"{pulse.path}: prepare.md_layout is 'combined' (no data/in_md) but "
+                f"{wf} setting {key} of workflows/{wf}/settings.ymmsl reads data/in_md"
+                f"{' through its config file' if 'data/in_md' not in value else ''}; "
+                f"replace it through settings.{wf}.{key} (see cases/pulses/105073.yaml)"
+            )
+
+
+def generated_entries(pulse: Pulse, wf: str) -> list[Entry]:
+    """The override settings derived from the pulse keys (not the pass-through)."""
+    entries: list[Entry] = []
     window = [("t_min", pulse.t_start), ("t_max", pulse.t_end)]
+    window_origin = "pulse: time.t_start / time.t_end"
     if wf == "inverse_convergence":
-        groups.append(
-            (
-                "time.t_start / time.t_end: slices of the prepared grid the loop visits",
-                [(f"loop.{k}", v) for k, v in window],
-            )
-        )
-        if pulse.transport_dt is not None:
-            groups.append(
-                (
-                    "time.transport_dt: TORAX step inside each slice interval",
-                    [("transport.torax.fixed_dt", pulse.transport_dt)],
+        entries += [Entry(f"loop.{k}", v, window_origin) for k, v in window]
+        if pulse.inverse_dt is not None:
+            entries.append(
+                Entry(
+                    "transport.torax.fixed_dt",
+                    pulse.inverse_dt,
+                    "pulse: time.inverse_dt",
                 )
             )
-        if pulse.loop:
-            groups.append(
-                (
-                    "inverse_convergence: outer loop tuning",
-                    [(f"loop.{k}", v) for k, v in pulse.loop.items()],
-                )
-            )
+        entries += [
+            Entry(f"loop.{k}", v, f"pulse: inverse_convergence.{k}")
+            for k, v in pulse.loop.items()
+        ]
     elif wf == "prescribed_transport":
-        groups.append(
-            (
-                "time.t_start / time.t_end: time range loaded by the source",
-                [(f"source.{k}", v) for k, v in window],
-            )
-        )
-        if pulse.transport_dt is not None or pulse.calibration_model is not None:
-            logger.info(
-                "prescribed_transport has no TORAX: time.transport_dt and "
-                "transport_calibration do not apply to it"
-            )
+        entries += [Entry(f"source.{k}", v, window_origin) for k, v in window]
     elif wf == "evolutive_controller":
         if pulse.forward_source is not None:
-            groups.append(
-                (
-                    "time.forward_source: inverse result the forward run starts from",
-                    [("source.source_uri", json.dumps(pulse.forward_source))],
+            entries.append(
+                Entry(
+                    "source.source_uri",
+                    pulse.forward_source,
+                    "pulse: time.forward_source",
                 )
             )
-        groups.append(
-            (
-                "time.forward_t_start / time.forward_t_end: time range loaded by the "
-                "source",
-                [
-                    ("source.t_min", pulse.forward_t_start),
-                    ("source.t_max", pulse.forward_t_end),
-                ],
+        entries.append(
+            Entry("source.t_min", pulse.forward_t_start, "pulse: time.forward_t_start")
+        )
+        entries.append(
+            Entry(
+                "source.t_max",
+                pulse.forward_load_t_end,
+                "pulse: time.forward_load_t_end",
             )
         )
         if pulse.forward_source_dt is not None:
-            groups.append(
-                (
-                    "time.forward_source_dt: resampling step of the source",
-                    [("source.dt", pulse.forward_source_dt)],
+            entries.append(
+                Entry(
+                    "source.dt",
+                    pulse.forward_source_dt,
+                    "pulse: time.forward_source_dt",
                 )
             )
         if pulse.forward_dt is not None:
-            groups.append(
-                (
-                    "time.forward_dt: TORAX and NICE evolutive step",
-                    [
-                        ("torax.fixed_dt", pulse.forward_dt),
-                        ("nice_evo_rd.dt", pulse.forward_dt),
-                        ("nice_evo_rd.t_interval", pulse.forward_dt),
-                    ],
-                )
-            )
-        groups.append(
-            (
-                "time.forward_t_end: end of the forward simulation",
-                [
-                    ("torax.t_final", pulse.forward_t_end),
-                    ("nice_evo_rd.t_end", pulse.forward_t_end),
-                ],
-            )
-        )
+            entries += [
+                Entry(k, pulse.forward_dt, "pulse: time.forward_dt")
+                for k in ("torax.fixed_dt", "nice_evo_rd.dt", "nice_evo_rd.t_interval")
+            ]
+        entries += [
+            Entry(k, pulse.forward_t_end, "pulse: time.forward_t_end")
+            for k in ("torax.t_final", "nice_evo_rd.t_end")
+        ]
     elif wf in METIS_SOURCE:
         src = METIS_SOURCE[wf]
-        groups.append(
-            (
-                "time.t_start / time.t_end: time range streamed to METIS, one native "
-                "slice per message",
-                [(f"{src}.{k}", v) for k, v in window],
-            )
-        )
-        if pulse.transport_dt is not None or pulse.calibration_model is not None:
-            logger.info(
-                "%s has no TORAX: time.transport_dt and transport_calibration do not "
-                "apply to it",
-                wf,
-            )
+        entries += [Entry(f"{src}.{k}", v, window_origin) for k, v in window]
     else:  # pragma: no cover - rejected by load_pulse
         raise ConfigError(f"unsupported workflow {wf}")
-
     instance = TORAX_INSTANCE[wf]
     if pulse.calibration_model is not None and instance is not None:
-        name = torax_config_name(wf, pulse.shot)
-        groups.append(
-            (
-                "transport_calibration: calibrated TORAX config generated alongside",
-                [
-                    (
-                        f"{instance}.python_config_module",
-                        f"${{PDS_REPO}}/cases/overrides/generated/{name}",
-                    )
-                ],
+        entries.append(
+            Entry(
+                f"{instance}.python_config_module",
+                f"${{PDS_REPO}}/cases/overrides/{torax_config_name(wf, pulse.case)}",
+                "pulse: transport_calibration",
             )
         )
+    return entries
 
+
+def override_entries(pulse: Pulse, wf: str, pds_repo: Path) -> list[Entry]:
+    """Every setting of ``cases/overrides/<wf>_<case>.ymmsl``, in file order."""
+    _check_combined_layout(pulse, pds_repo, wf)
+    no_torax = TORAX_INSTANCE.get(wf) is None
+    if no_torax and (
+        pulse.inverse_dt is not None or pulse.calibration_model is not None
+    ):
+        logger.info(
+            "%s has no TORAX: time.inverse_dt and transport_calibration do not "
+            "apply to it",
+            wf,
+        )
+    entries = generated_entries(pulse, wf)
+    keys = {e.key for e in entries}
+    entries += [e for e in _shot_dependent(pulse, pds_repo, wf) if e.key not in keys]
+    entries += [
+        Entry(k, v, ORIGIN_PASS_THROUGH) for k, v in pulse.settings.get(wf, {}).items()
+    ]
+    return entries
+
+
+# Comment written above each group of generated settings, by origin.
+_GROUP_COMMENTS = {
+    "pulse: time.t_start / time.t_end": {
+        "inverse_convergence": "time.t_start / time.t_end: slices of the prepared grid "
+        "the loop visits",
+        "prescribed_transport": "time.t_start / time.t_end: time range loaded by the "
+        "source",
+        "metis_from_dina": "time.t_start / time.t_end: time range streamed to METIS, "
+        "one native slice per message",
+        "metis_nice_inverse_from_dina": "time.t_start / time.t_end: time range "
+        "streamed to METIS, one native slice per message",
+    },
+    "pulse: time.inverse_dt": "time.inverse_dt: TORAX step inside each slice interval",
+    "pulse: time.forward_source": "time.forward_source: inverse result the forward run "
+    "starts from",
+    "pulse: time.forward_t_start": "time.forward_t_start: first forward time loaded by "
+    "the source",
+    "pulse: time.forward_load_t_end": "time.forward_load_t_end: end of the time range "
+    "loaded by the source",
+    "pulse: time.forward_source_dt": "time.forward_source_dt: resampling step of the "
+    "source",
+    "pulse: time.forward_dt": "time.forward_dt: TORAX and NICE evolutive step",
+    "pulse: time.forward_t_end": "time.forward_t_end: end of the forward simulation",
+    "pulse: transport_calibration": "transport_calibration: calibrated TORAX config "
+    "generated alongside",
+    ORIGIN_CASE_NAME: "case differs from shot: ${SHOT}-dependent settings of the "
+    "workflow made explicit",
+    ORIGIN_PASS_THROUGH: "settings: pass-through from the pulse file",
+}
+
+
+def _group_comment(origin: str, wf: str) -> str:
+    if origin.startswith("pulse: inverse_convergence."):
+        return "inverse_convergence: outer loop tuning"
+    comment = _GROUP_COMMENTS.get(origin, origin)
+    if isinstance(comment, dict):
+        return comment.get(wf, origin)
+    return comment
+
+
+def render_override(pulse: Pulse, wf: str, mark: str, entries: list[Entry]) -> str:
+    """cases/overrides/<wf>_<case>.ymmsl."""
     lines = [mark, "ymmsl_version: v0.2"]
-    lines.append(f"# Per-shot settings for {wf} on {pulse.shot}, stacked after the")
-    lines.append(f"# generic workflows/{wf}/settings.ymmsl by bin/pds-create-case.")
+    lines.append(f"# Per-shot settings for {wf} on {pulse.case} (shot {pulse.shot}),")
+    lines.append(f"# stacked after the generic workflows/{wf}/settings.ymmsl by")
+    lines.append("# bin/pds-create-case.")
     if pulse.description:
         lines.append(f"# {pulse.description}")
     lines.append("settings:")
-    for comment, items in groups:
-        lines.append(f"  # {comment}")
-        lines.extend(f"  {k}: {_yaml_value(v)}" for k, v in items)
+    if not entries:
+        lines[-1] = "settings: {}"
+    previous: str | None = None
+    for e in entries:
+        comment = _group_comment(e.origin, wf)
+        if comment != previous:
+            lines.append(f"  # {comment}")
+            previous = comment
+        lines.append(f"  {e.key}: {_yaml_setting(e.value)}")
     return "\n".join(lines) + "\n"
 
 
@@ -918,9 +1263,13 @@ def source_env_output(pulse: Pulse, pds_repo: Path, scenarios_repo: Path) -> Out
 def workflow_outputs(pulse: Pulse, wf: str, pds_repo: Path) -> list[Output]:
     """The files that would be written for one workflow, without touching the disk."""
     mark = marker(pulse, pds_repo)
-    overrides = pds_repo / "cases" / "overrides" / "generated"
+    overrides = overrides_dir(pds_repo)
+    entries = override_entries(pulse, wf, pds_repo)
     outputs = [
-        Output(overrides / f"{wf}_{pulse.shot}.ymmsl", render_override(pulse, wf, mark))
+        Output(
+            overrides / override_name(wf, pulse.case),
+            render_override(pulse, wf, mark, entries),
+        )
     ]
     if pulse.calibration_model is not None and TORAX_INSTANCE[wf] is not None:
         generic_path = pds_repo / "workflows" / wf / "config_torax.py"
@@ -930,52 +1279,69 @@ def workflow_outputs(pulse: Pulse, wf: str, pds_repo: Path) -> list[Output]:
             raise ConfigError(f"cannot read {generic_path}: {exc}") from exc
         outputs.append(
             Output(
-                overrides / torax_config_name(wf, pulse.shot),
+                overrides / torax_config_name(wf, pulse.case),
                 render_torax_config(pulse, wf, generic, mark),
             )
         )
     return outputs
 
 
+def overrides_dir(pds_repo: Path) -> Path:
+    return pds_repo / "cases" / "overrides"
+
+
+def override_name(wf: str, case: str) -> str:
+    return f"{wf}_{case}.ymmsl"
+
+
+def _has_marker(path: Path) -> bool:
+    with path.open() as f:
+        return f.readline().startswith(MARKER_PREFIX)
+
+
 def check_overwrite(outputs: list[Output], force: bool) -> None:
     """Refuse to replace a file that bin/pds-configure did not write."""
     for out in outputs:
-        if not out.path.exists() or force:
+        if not out.path.exists() or force or _has_marker(out.path):
             continue
-        with out.path.open() as f:
-            first = f.readline()
-        if not first.startswith(MARKER_PREFIX):
-            raise ConfigError(
-                f"{out.path} exists and was not generated by bin/pds-configure "
-                "(no marker line); move it away or rerun with --force"
-            )
+        if out.path.parent.name == "overrides":
+            raise ConfigError(hand_written_message(out.path))
+        raise ConfigError(
+            f"{out.path} exists and was not generated by bin/pds-configure "
+            "(no marker line); move it away or rerun with --force"
+        )
 
 
-def warn_hand_written(pulse: Pulse, workflows: list[str], pds_repo: Path) -> None:
-    """Warn about a cases/overrides/<wf>_<shot>.ymmsl that shadows the generated one."""
-    for wf in workflows:
-        name = f"{wf}_{pulse.shot}.ymmsl"
-        path = pds_repo / "cases" / "overrides" / name
+def hand_written_message(path: Path) -> str:
+    stem = path.name.removesuffix(".ymmsl")
+    case = stem.split("_", 1)[1] if "_" in stem else "<case>"
+    for wf in SUPPORTED_WORKFLOWS:
+        if stem.startswith(f"{wf}_"):
+            case = stem[len(wf) + 1 :]
+    return (
+        f"{path} exists without the GENERATED marker: hand-written overrides are no "
+        f"longer supported; move its settings into cases/pulses/{case}.yaml (settings: "
+        "section, companion files under cases/pulses/files/) and delete it (or rerun "
+        "with --force to overwrite it)"
+    )
+
+
+def remove_stale_override(pulse: Pulse, wf: str, pds_repo: Path) -> None:
+    """A workflow not listed in the pulse file must have no override left behind."""
+    overrides = overrides_dir(pds_repo)
+    for name in (override_name(wf, pulse.case), torax_config_name(wf, pulse.case)):
+        path = overrides / name
         if not path.is_file():
             continue
-        with path.open() as f:
-            first = f.readline()
-        if first.startswith(MARKER_PREFIX):
-            logger.warning(
-                "warning: cases/overrides/%s is a stale generated file from the old "
-                "location; it takes precedence over cases/overrides/generated/%s in "
-                "pds-create-case and should be deleted",
-                name,
-                name,
-            )
-        else:
-            logger.warning(
-                "warning: hand-written override cases/overrides/%s exists and takes "
-                "precedence; the generated cases/overrides/generated/%s is ignored by "
-                "pds-create-case",
-                name,
-                name,
-            )
+        if not _has_marker(path):
+            raise ConfigError(hand_written_message(path))
+        path.unlink()
+        logger.info(
+            "removed stale generated %s (%s is not in the workflows of %s)",
+            path,
+            wf,
+            pulse.path,
+        )
 
 
 def forward_source_uri(pulse: Pulse, pds_repo: Path) -> str:
@@ -1029,6 +1395,14 @@ def check_forward_window(pulse: Pulse, pds_repo: Path) -> None:
         return
     times = _equilibrium_times(uri)
     first, last = times[0], times[-1]
+    if pulse.forward_load_t_end > last + TIME_TOL:
+        logger.warning(
+            "warning: time.forward_load_t_end = %g is beyond the last slice (%g s) of "
+            "the forward source %s; the source loads up to that slice",
+            pulse.forward_load_t_end,
+            last,
+            uri,
+        )
     if a < first - TIME_TOL or b > last + TIME_TOL:
         raise ConfigError(
             f"{pulse.path}: forward window [{a:g}, {b:g}] "
@@ -1054,8 +1428,8 @@ def check_forward_window(pulse: Pulse, pds_repo: Path) -> None:
             "native slices: %s s); the source then starts from the next native slice "
             "or, with time.forward_source_dt set, from a state interpolated at "
             "forward_t_start -- seeding the forward run from a non-native/other slice "
-            "diverged on 105073 (see cases/overrides/evolutive_controller_105073.ymmsl); "
-            "prefer one of the native values",
+            "diverged on 105073 (see cases/pulses/105073.yaml); prefer one of the "
+            "native values",
             a,
             uri,
             nearest,
@@ -1077,7 +1451,7 @@ def prepare_command(pulse: Pulse, pds_repo: Path) -> list[str]:
 
 
 def create_command(wf: str, pulse: Pulse, pds_repo: Path) -> list[str]:
-    return [str(pds_repo / "bin" / "pds-create-case"), "-f", wf, str(pulse.shot)]
+    return [str(pds_repo / "bin" / "pds-create-case"), "-f", wf, pulse.case]
 
 
 def _run(cmd: list[str], env: dict[str, str], capture: bool = False) -> str:
@@ -1105,6 +1479,8 @@ def run_create(
 ) -> None:
     """Create one case per workflow; a failing workflow is recorded in ``failed``."""
     check = pds_repo / "preprocessing" / "check_scenario.py"
+    # The overrides were just written: pds-create-case must not regenerate them.
+    env = dict(env, PDS_CONFIGURE_NO_REGEN="1")
     for wf in workflows:
         try:
             out = _run(create_command(wf, pulse, pds_repo), env, capture=True)
@@ -1122,6 +1498,12 @@ def run_create(
             f.write(
                 f"export SCENARIOS_REPO={shlex.quote(str(scenarios_repo.resolve()))}\n"
             )
+        try:
+            (case_dir / "settings_origin.txt").write_text(
+                explain_table(pulse, wf, pds_repo, [])
+            )
+        except ConfigError as exc:
+            logger.warning("settings_origin.txt not written for %s: %s", wf, exc)
         if not check.exists():
             logger.warning("%s not found; skipping the configuration check plot", check)
             continue
@@ -1160,6 +1542,90 @@ def _fail_workflow(failed: dict[str, str], wf: str, exc: ConfigError) -> None:
     print(f"pds-configure: {wf}: skipped, continuing with the others", file=sys.stderr)
 
 
+# --------------------------------------------------------------------------- explain
+
+
+def _ymmsl_settings(text: str, where: str) -> dict[str, Any]:
+    """The ``settings:`` of a yMMSL document, loaded with the ymmsl library (falling
+    back to a plain YAML read when ymmsl is not importable)."""
+    try:
+        import ymmsl
+        from ymmsl.v0_2 import Configuration
+
+        cfg = ymmsl.load_as(Configuration, text)
+        return {str(k): cfg.settings[k] for k in cfg.settings}
+    except ImportError:
+        try:
+            raw = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise ConfigError(f"{where}: invalid YAML: {exc}") from exc
+        items = (raw or {}).get("settings") if isinstance(raw, dict) else None
+        return {str(k): v for k, v in (items or {}).items()}
+    except Exception as exc:  # ymmsl raises its own error types
+        raise ConfigError(f"{where}: cannot load settings: {exc}") from exc
+
+
+def _read(path: Path) -> str:
+    try:
+        return path.read_text()
+    except OSError as exc:
+        raise ConfigError(f"cannot read {path}: {exc}") from exc
+
+
+def explain_rows(
+    pulse: Pulse, wf: str, pds_repo: Path, overlays: list[Path]
+) -> list[tuple[str, Any, str]]:
+    """Every effective setting of the case ``<wf>_<case>`` with its origin, in the
+    stacking order of bin/pds-create-case / bin/pds-run-case (later files win)."""
+    wf_dir = pds_repo / "workflows" / wf
+    merged: dict[str, tuple[Any, str]] = {}
+    for name, origin in (
+        ("workflow.ymmsl", ORIGIN_WORKFLOW),
+        ("settings.ymmsl", ORIGIN_SETTINGS),
+    ):
+        path = wf_dir / name
+        if path.is_file():
+            for key, value in _ymmsl_settings(_read(path), str(path)).items():
+                merged[key] = (value, origin)
+    entries = override_entries(pulse, wf, pds_repo)
+    rendered = _ymmsl_settings(
+        render_override(pulse, wf, marker(pulse, pds_repo), entries), "override"
+    )
+    for e in entries:
+        merged[e.key] = (rendered.get(e.key, e.value), e.origin)
+    for overlay in overlays:
+        for key, value in _ymmsl_settings(_read(overlay), str(overlay)).items():
+            merged[key] = (value, f"overlay: {overlay}")
+    return [(key, value, origin) for key, (value, origin) in merged.items()]
+
+
+def _shown(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "[" + ", ".join(_shown(v) for v in value) + "]"
+    return _yaml_value(value)
+
+
+def explain_table(pulse: Pulse, wf: str, pds_repo: Path, overlays: list[Path]) -> str:
+    rows = [
+        (k, _shown(v), o) for k, v, o in explain_rows(pulse, wf, pds_repo, overlays)
+    ]
+    head = ("setting", "value", "origin")
+    widths = [max(len(r[i]) for r in [head, *rows]) for i in range(3)]
+    lines = [
+        f"# {wf} on {pulse.case} (shot {pulse.shot}), from {pulse.path}: effective "
+        "settings and their origin",
+        "# values are raw: ${PDS_REPO}/${SCENARIOS_REPO}/${SHOT}/${CASE_DIR} are "
+        "substituted by bin/pds-create-case, config paths localized into config/",
+    ]
+    fmt = f"{{:<{widths[0]}}} | {{:<{widths[1]}}} | {{}}"
+    lines.append(fmt.format(*head))
+    lines.append("-" * widths[0] + "-+-" + "-" * widths[1] + "-+-" + "-" * widths[2])
+    lines.extend(fmt.format(*r) for r in rows)
+    return "\n".join(lines) + "\n"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pds-configure",
@@ -1186,7 +1652,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="run bin/pds-create-case and preprocessing/check_scenario.py afterwards",
     )
     parser.add_argument(
+        "--overrides-only",
+        action="store_true",
+        help="write the overrides only, never source.env (bin/pds-create-case uses it; "
+        "a --workflow not listed in the pulse file then generates nothing)",
+    )
+    parser.add_argument(
         "--force", action="store_true", help="overwrite files without the marker line"
+    )
+    parser.add_argument(
+        "--explain",
+        nargs="?",
+        const="*",
+        metavar="WF",
+        help="print the effective settings of each selected workflow (or only WF) with "
+        "their origin, and exit",
+    )
+    parser.add_argument(
+        "--overlay",
+        action="append",
+        type=Path,
+        default=[],
+        metavar="FILE",
+        help="run-time overlay ymmsl to include in --explain (repeatable)",
     )
     parser.add_argument(
         "--dry-run",
@@ -1204,6 +1692,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="pds-configure: %(message)s")
+    # The ymmsl loader (yatiml) logs every YAML node at INFO; keep it quiet.
+    for name in ("yatiml", "ymmsl"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     pds_repo = Path(
         os.environ.get("PDS_REPO") or Path(__file__).resolve().parent.parent
     )
@@ -1213,21 +1704,45 @@ def main(argv: list[str] | None = None) -> int:
         if args.print_t_list:
             print(" ".join(_fmt_time(t) for t in pulse.t_list))
             return 0
+        check_settings(pulse, pds_repo)
         selected = pulse.workflows
         if args.workflow:
             for wf in args.workflow:
-                if wf not in pulse.workflows:
+                if wf in pulse.workflows:
+                    continue
+                if not args.overrides_only:
                     raise ConfigError(
                         f"--workflow {wf}: not in the workflows of {pulse.path} "
                         f"({', '.join(pulse.workflows)})"
                     )
+                logger.info(
+                    "%s is not in the workflows of %s: no override generated",
+                    wf,
+                    pulse.path,
+                )
+                if not args.dry_run:
+                    remove_stale_override(pulse, wf, pds_repo)
             selected = [wf for wf in pulse.workflows if wf in args.workflow]
-        source_env = source_env_output(pulse, pds_repo, scenarios_repo)
-        check_overwrite([source_env], args.force)
+        if args.explain is not None:
+            explained = selected
+            if args.explain != "*":
+                if args.explain not in pulse.workflows:
+                    raise ConfigError(
+                        f"--explain {args.explain}: not in the workflows of "
+                        f"{pulse.path} ({', '.join(pulse.workflows)})"
+                    )
+                explained = [args.explain]
+            for wf in explained:
+                print(explain_table(pulse, wf, pds_repo, args.overlay), end="")
+            return 0
+        outputs: list[Output] = []
+        if not args.overrides_only:
+            source_env = source_env_output(pulse, pds_repo, scenarios_repo)
+            check_overwrite([source_env], args.force)
+            outputs.append(source_env)
         # Per-workflow generation and checks: a failure skips that workflow only.
         failed: dict[str, str] = {}
         workflows: list[str] = []
-        outputs = [source_env]
         for wf in selected:
             try:
                 wf_outputs = workflow_outputs(pulse, wf, pds_repo)
@@ -1239,7 +1754,6 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             workflows.append(wf)
             outputs.extend(wf_outputs)
-        warn_hand_written(pulse, workflows, pds_repo)
         env = dict(os.environ)
         env.update(
             PDS_REPO=str(pds_repo),

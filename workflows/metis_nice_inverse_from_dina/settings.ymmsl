@@ -11,7 +11,8 @@ ymmsl_version: v0.2
 #
 # Defaults below are PREDICTIVE mode (METIS computes its own profiles/sources; none are read
 # from DINA). A shot needing interpretative mode overrides the five metis_external_data_*
-# settings via cases/overrides/metis_nice_inverse_from_dina_<shot>.ymmsl.
+# settings through the settings: section of its pulse file cases/pulses/<shot>.yaml
+# (generated into cases/overrides/metis_nice_inverse_from_dina_<shot>.ymmsl).
 
 resources:
   metis_nice_inverse_from_dina.source_metis: {threads: 1}
@@ -38,8 +39,7 @@ settings:
   metis.metis_psioffset: 9.0
 
   # METIS switches for reading external data from the received IDSs -- predictive defaults,
-  # all off. See cases/overrides/metis_nice_inverse_from_dina_<shot>.ymmsl for an
-  # interpretative shot.
+  # all off; an interpretative shot switches them on in its pulse file (settings: section).
   metis.metis_external_data_equilibrium: 0
   metis.metis_external_data_current_diffusion: 0
   metis.metis_external_data_electron_temperature: 0

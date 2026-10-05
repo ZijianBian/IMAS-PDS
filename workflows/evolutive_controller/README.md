@@ -28,8 +28,10 @@ A PCSSP `magnetic_controller` (MATLAB/Simulink, see `controllers/KCURR_RZIp/`) r
 
 Structure lives in `workflow.ymmsl`; shared knobs (including a default `waveforms.yaml`
 template) in `settings.ymmsl`; per-shot solver timing (the flattop window genuinely differs
-per pulse, so has no sane generic default) in `cases/overrides/evolutive_controller_<shot>.ymmsl`
-(105084's restricts the run to flattop only, see below).
+per pulse, so has no sane generic default) in the shot's pulse file `cases/pulses/<shot>.yaml`
+(`time.forward_*`), from which `bin/pds-create-case` generates
+`cases/overrides/evolutive_controller_<shot>.ymmsl` (105084's restricts the run to flattop
+only, see below).
 
 ## Running it
 
@@ -45,8 +47,8 @@ sbatch bin/pds-run-case.sbatch cases/evolutive_controller_105084
 ```
 
 `pds-create-case` stacks `workflow.ymmsl`, `settings.ymmsl` (resources, shared knobs), and
-`cases/overrides/evolutive_controller_<shot>.ymmsl` if it exists into numbered files under
-the case folder; `pds-run-case.sbatch` runs that folder under `muscle_manager`, writing to
+`cases/overrides/evolutive_controller_<shot>.ymmsl` (generated from `cases/pulses/<shot>.yaml`
+if that lists this workflow) into numbered files under the case folder; `pds-run-case.sbatch` runs that folder under `muscle_manager`, writing to
 `cases/runs/<case>`.
 
 ## Assumptions

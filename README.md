@@ -53,8 +53,12 @@ A run pairs a **workflow** (how it is simulated, in `workflows/`) with a **scena
 is simulated). Scenarios are prepared from pulse files into `scenarios/` (see
 "Simulating a new pulse" above). `bin/pds-create-case` materializes that pairing as a
 **case** directory under `cases/`.
-These premade cases are examples, for the legacy shots (105073, 105078, 105084, 105092,
-105099), that can be built upon; they can still use the shared prepared data in
+Everything shot-specific lives in the pulse file `cases/pulses/<case>.yaml` (the only
+other configuration layer is the workflow's generic `workflows/<workflow>/settings.ymmsl`);
+`bin/pds-create-case <workflow> <case>` regenerates the per-workflow override
+(`cases/overrides/`, a git-ignored cache) from the pulse file itself. The legacy shots
+(105073, 105078, 105084, 105092, 105099, plus the `105084_literal` design) have pulse
+files reproducing their former cases; they can still use the shared prepared data in
 `/work/projects/pds/pds-scenarios` through `SCENARIOS_REPO` (the default used by
 `bin/pds-create-case` and `bin/pds-run-case`). The user is free to change anything in the
 case directory. `bin/pds-run-case.sbatch` is then used to run the case using a Slurm job:

@@ -20,7 +20,8 @@ sbatch --time=00:20:00 --cpus-per-task=8 bin/pds-run-case.sbatch cases/prescribe
 ```
 
 `pds-create-case` stacks: `workflow.ymmsl`, this workflow's `settings.ymmsl`, and
-`cases/overrides/prescribed_transport_<shot>.ymmsl`.
+`cases/overrides/prescribed_transport_<shot>.ymmsl`, which it generates from the pulse
+file `cases/pulses/<shot>.yaml` if that lists this workflow (see `cases/pulses/README.md`).
 
 The `settings.ymmsl` contains (all templated from `${SHOT}`):
 

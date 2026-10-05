@@ -2,15 +2,19 @@
 # pds-configure -- generate every shot-specific PDS file from one pulse file.
 #
 #   pds-configure <pulse.yaml> [--workflow WF ...] [--prepare] [--create] [--force]
-#                 [--dry-run] [--print-t-list]
+#                 [--overrides-only] [--dry-run] [--print-t-list] [--explain [WF]]
+#                 [--overlay FILE ...]
 #
 #   e.g. pds-configure cases/pulses/105033.yaml --dry-run      # show what would be written
 #        pds-configure cases/pulses/105033.yaml                # write source.env + overrides
 #        pds-configure cases/pulses/105033.yaml --prepare --create
 #        pds-configure cases/pulses/105033.yaml --workflow inverse_convergence --create
+#        pds-configure cases/pulses/105033.yaml --explain      # every effective setting + origin
 #
-# Writes $SCENARIOS_REPO/<shot>/source.env and cases/overrides/<wf>_<shot>.ymmsl (plus a
-# calibrated <wf>_<shot>_config_torax.py when the pulse file has transport_calibration).
+# Writes $SCENARIOS_REPO/<shot>/source.env and cases/overrides/<wf>_<case>.ymmsl (plus a
+# calibrated <wf>_<case>_config_torax.py when the pulse file has transport_calibration);
+# bin/pds-create-case regenerates the override itself (--overrides-only), so cases/overrides/
+# is only a cache.
 # --prepare runs preprocessing/prepare (the scenario data, see preprocessing/README.md);
 # --create runs bin/pds-create-case, records the data root in each new case's case.env
 # (so post-processing needs no SCENARIOS_REPO at submit time) and runs

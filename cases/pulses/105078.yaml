@@ -1,12 +1,13 @@
 # Pulse file for 105078 -- see cases/pulses/TEMPLATE.yaml for every key.
-# Regenerate source.env with: bin/pds-configure cases/pulses/105078.yaml
+# Regenerate the derived files with: bin/pds-configure cases/pulses/105078.yaml
 shot: 105078
 description: "DINA shot 105078; source: DINA project database /work/projects/dina/imasdb (MDSplus), not the official ITER store"
 
-# Preparation only. 105078 already has HAND-WRITTEN overrides in cases/overrides/, kept as
-# they are (generating them from this file would change the cases):
-#   metis_nice_inverse_from_dina_105078.ymmsl
-# This file drives the data preparation and the plot times only.
+# Preparation only: this shot has no tuned workflow configuration (its former
+# cases/overrides/*.ymmsl were empty, i.e. the generic settings). The METIS workflows
+# are deliberately not listed: listing them would write source_metis.t_min/t_max =
+# time.t_start/t_end, cutting METIS's own input range (metis_in spans the whole DINA
+# pulse). bin/pds-create-case <workflow> 105078 uses the generic settings only.
 workflows: []
 
 prepare:
@@ -20,7 +21,7 @@ prepare:
 
 time:
   # Stored slice range 2.52 .. 282.82 s, rounded outward to 0.1 s.
-  # Applies only to overrides generated from this file (none today).
+  # Used by the overrides generated from this file (none while workflows is empty).
   t_start: 2.5
   t_end: 282.9
 
