@@ -1,0 +1,171 @@
+# EC HCD workflow coupled to TORAX with NICE initialization.
+ymmsl_version: v0.2
+imports:
+- from imas_muscle3 import implementation source_component
+- from imas_muscle3 import implementation sink_component
+- from imas_muscle3 import implementation sink_source_component
+- from imas_muscle3 import implementation accumulator_component
+
+models:
+  hcdwf_torax:
+    components:
+      source:
+        description: original 105099 inputs for NICE and TORAX initialization
+        implementation: source_component
+        ports:
+          o_i: [equilibrium_out, core_profiles_out, wall_out, pf_active_out, pf_passive_out, iron_core_out]
+
+      nice_inv:
+        description: recompute the full NICE trace with the accepted benchmark XML
+        implementation: nice_inv
+        ports:
+          f_init: [equilibrium_in, wall_in, pf_active_in, pf_passive_in, iron_core_in]
+          o_f: [equilibrium_out, pf_active_out]
+
+      geometry_source:
+        description: sample the benchmark's prepared HCD geometry on the TORAX clock
+        implementation: sink_source_component
+        ports:
+          f_init: [equilibrium_in]
+          o_f: [equilibrium_out]
+
+      ec_source:
+        description: sample historical 105099 EC launchers on the TORAX clock
+        implementation: sink_source_component
+        ports:
+          f_init: [equilibrium_in]
+          o_f: [ec_launchers_out]
+
+      accumulator_eq:
+        description: accumulate the equilibrium trace before TORAX initialization
+        implementation: accumulator_component
+        ports:
+          s: [equilibrium_in]
+          o_f: [equilibrium_out]
+
+      accumulator_cp:
+        description: accumulate the core-profiles trace before TORAX initialization
+        implementation: accumulator_component
+        ports:
+          s: [core_profiles_in]
+          o_f: [core_profiles_out]
+
+      torax:
+        description: sole dynamic time controller and transport solver
+        implementation: torax
+        ports:
+          f_init: [equilibrium_in_f, core_profiles_in_f]
+          s: [core_sources_in_s]
+          o_i: [equilibrium_out_i, core_profiles_out_i]
+          o_f: [equilibrium_out_f, core_profiles_out_f]
+
+      hcd_workflow:
+        description: existing direct HCD MUSCLE3 micro, EC-only reference configuration
+        implementation: hcd_workflow
+        ports:
+          f_init: [equilibrium_in, core_profiles_in, ec_launchers_in]
+          o_f: [core_sources_out]
+
+      transport_sink:
+        description: persist final TORAX transport state
+        implementation: sink_component
+        ports:
+          f_init: [equilibrium_in, core_profiles_in]
+
+    conduits:
+      # Recompute NICE before passing the complete trace to TORAX.
+      source.equilibrium_out: nice_inv.equilibrium_in
+      source.wall_out: nice_inv.wall_in
+      source.pf_active_out: nice_inv.pf_active_in
+      source.pf_passive_out: nice_inv.pf_passive_in
+      source.iron_core_out: nice_inv.iron_core_in
+      nice_inv.equilibrium_out: accumulator_eq.equilibrium_in
+      source.core_profiles_out: accumulator_cp.core_profiles_in
+      accumulator_eq.equilibrium_out: torax.equilibrium_in_f
+      accumulator_cp.core_profiles_out: torax.core_profiles_in_f
+
+      # Reuse the benchmark's prescribed HCD geometry and EC inputs;
+      # core_profiles still evolves in TORAX and HCD sources close the loop.
+      torax.equilibrium_out_i:
+      - geometry_source.equilibrium_in
+      - ec_source.equilibrium_in
+      geometry_source.equilibrium_out: hcd_workflow.equilibrium_in
+      torax.core_profiles_out_i: hcd_workflow.core_profiles_in
+      ec_source.ec_launchers_out: hcd_workflow.ec_launchers_in
+
+      # EC sources close the TORAX <-> HCD-WF loop.
+      hcd_workflow.core_sources_out: torax.core_sources_in_s
+
+      torax.equilibrium_out_f: transport_sink.equilibrium_in
+      torax.core_profiles_out_f: transport_sink.core_profiles_in
+
+programs:
+  # Published PDS NICE build: not the historical MUSCLE3 0.8 binary.
+  nice_inv:
+    base_env: clean
+    modules: NICE/3.0.0.dev258-intel-2025b-pds
+    env:
+      IMAS_AL_DISABLE_VALIDATE: "1"
+      IMAS_VERSION: "4.0.0"
+      OMP_NUM_THREADS: "2"
+    executable: $EBROOTNICE/run/nice_imas_inv_muscle3
+
+  # External TORAX-MUSCLE3 checkout; the module supplies its dependencies.
+  torax:
+    base_env: clean
+    modules: TORAX-MUSCLE3/0.1.3-intel-2025b-pds
+    env:
+      JAX_COMPILATION_CACHE_DIR: ${CASE_DIR}/cache/jax
+      PDS_HCDWF_105099_INPUT_URI: "imas:hdf5?path=${CASE_DIR}/preprocess/input/source"
+      HCDWF_TORAX_ACTOR_ROOT: ${CASE_DIR}/assets/torax-actor
+      JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
+    executable: /usr/bin/env
+    args:
+    - IMAS_VERSION=4.0.0
+    - 'PYTHONPATH="${HCDWF_TORAX_ACTOR_ROOT}:${PYTHONPATH:-}"'
+    - python -u -m torax_muscle3.torax_actor
+
+  hcd_workflow:
+    base_env: clean
+    modules:
+    - IMAS-Python/2.3.0-intel-2023b
+    - IMAS-Fortran/5.5.0-intel-2023b-DD-4.1.0
+    - lxml/4.9.3-GCCcore-13.2.0
+    - XMLlib/3.2.0-intel-compilers-2023.2.1
+    - INTERPOS/9.2.0-iimkl-2023b
+    - Waveform-Cooker/1.6.0-GCCcore-13.2.0
+    - matplotlib/3.8.2-iimkl-2023b
+    - PyYAML/6.0.1-GCCcore-13.2.0
+    env:
+      IMAS_AL_DISABLE_VALIDATE: "1"
+      PYTHONNOUSERSITE: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      HCD_SOURCE_DIR: ${CASE_DIR}/assets/hcd-source
+      ACTOR_FOLDER: ${CASE_DIR}/assets/actors
+      HCDWF_PDS_VENV_DIR: ${CASE_DIR}/assets/hcd-venv
+      HCDWF_IWRAP_ROOT: ${CASE_DIR}/assets/iwrap
+      HCDWF_PDS_PYTHONPATH: ${CASE_DIR}/assets/hcd-source:${CASE_DIR}/assets/hcd-venv/lib/python3.11/site-packages:${CASE_DIR}/assets/actors:${CASE_DIR}/assets/iwrap/python
+      HCDWF_TORBEAM_DIR: ${CASE_DIR}/assets/torbeam
+      HCDWF_CORE_SOURCES_DIR: ${CASE_DIR}/assets/core-sources
+      HCDWF_TORAX_HCD_CONFIG_DIR: ${CASE_DIR}/preprocess/hcd_config
+    executable: /usr/bin/env
+    # Expand paths after module loading; yMMSL env values are literal strings.
+    args:
+    - IMAS_VERSION=4.1.0
+    - 'PATH="${HCDWF_PDS_VENV_DIR}/bin:${HCDWF_IWRAP_ROOT}/bin:${PATH}"'
+    - 'PYTHONPATH="${HCD_SOURCE_DIR}:${HCDWF_TORBEAM_DIR}:${HCDWF_CORE_SOURCES_DIR}:${HCDWF_PDS_PYTHONPATH}:${PYTHONPATH:-}"'
+    - 'MPLCONFIGDIR="${PWD}/.matplotlib"'
+    - '"${HCDWF_PDS_VENV_DIR}/bin/python" -u -m hcdworkflow.hcd_workflow_m3'
+    - '"${HCDWF_TORAX_HCD_CONFIG_DIR}"'
+
+resources:
+  hcdwf_torax.source: {threads: 1}
+  hcdwf_torax.nice_inv: {threads: 2}
+  hcdwf_torax.geometry_source: {threads: 1}
+  hcdwf_torax.ec_source: {threads: 1}
+  hcdwf_torax.accumulator_eq: {threads: 1}
+  hcdwf_torax.accumulator_cp: {threads: 1}
+  hcdwf_torax.torax: {threads: 1}
+  hcdwf_torax.hcd_workflow: {threads: 1}
+  hcdwf_torax.transport_sink: {threads: 1}

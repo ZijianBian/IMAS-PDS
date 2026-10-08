@@ -1,0 +1,31 @@
+ymmsl_version: v0.2
+
+settings:
+  # Preserve the full input trace for initialization.
+  source.dd_version: "4.1.0"
+  source.source_uri: "imas:hdf5?path=${CASE_DIR}/preprocess/input/source"
+  source.iterative: true
+
+  nice_inv.xml_path: ${PDS_REPO}/cases/overrides/hcdwf_${SHOT}/config_nice.xml
+
+  geometry_source.dd_version: "4.1.0"
+  geometry_source.source_uri: "imas:hdf5?path=${CASE_DIR}/preprocess/input/geometry"
+  geometry_source.interpolation_method: "closest"
+  ec_source.dd_version: "4.1.0"
+  ec_source.source_uri: "imas:hdf5?path=${CASE_DIR}/preprocess/input/ec"
+  ec_source.interpolation_method: "closest"
+
+  # Case physics configuration, with its input URI resolved during preprocessing.
+  torax.python_config_module: ${PDS_REPO}/cases/overrides/hcdwf_${SHOT}/config_torax.py
+  # The old actor always read composition from IDS and used equilibrium_interval=0.1.
+  torax.use_IDS_plasma_composition: true
+  # Benchmark compatibility: default-off TORAX actor switches, matching the
+  # accepted actor's fixed-width ion handling and equilibrium-based psi setup.
+  torax.normalize_padded_ion_names: true
+  torax.initial_psi_mode: geometry
+  torax.communication_interval: 0.1
+  torax.output_all_timeslices: true
+
+  transport_sink.dd_version: "4.1.0"
+  transport_sink.sink_uri: "imas:hdf5?path=${CASE_DIR}/output/transport_ec"
+  transport_sink.sink_mode: "x"
