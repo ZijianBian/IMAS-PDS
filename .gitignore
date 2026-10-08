@@ -27,6 +27,14 @@ ymmsl_files/*
 cases/*/
 !cases/overrides/
 !cases/input/
+cases/input/hcdwf_105099/
+cases/input/hcd_nbi_geometry_130000_2301_dd410/
+
+# Local archives, benchmark data and run records are not source code.
+.local_dev/
+run_*/
+slurm-*.out
+workflows/hcdwf/torax_muscle3/_version.py
 
 !*.template
 
