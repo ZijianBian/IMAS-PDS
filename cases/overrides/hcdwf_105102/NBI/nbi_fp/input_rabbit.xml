@@ -1,0 +1,79 @@
+<parameters>
+    <!-- Smoothing parameter of deposition profile (0 = switched off ) -->
+    <jumpcor> 2 </jumpcor>
+
+    <!-- Energy limit factor -->
+    <Elimitfac> 0. </Elimitfac>
+
+    <!-- Complete path to atomic tables -->
+    <table_path>${CASE_DIR}/assets/rabbit-tables</table_path>
+
+    <!-- Complete path to namelist -->
+    <namelist_path>${CASE_DIR}/preprocess/hcd_config/NBI/nbi_fp/options.nml</namelist_path>
+
+    <!-- Switching parameter of consideration of charge exchange loss -->
+    <cxloss> false </cxloss>
+
+    <!-- Number of orbits for orbit-average (it is not considered in NEMO/RISK) -->
+    <norbits> 40 </norbits>
+
+    <!-- Parameter for nv of distribution function(default is 0) -->
+    <distfun_nv> 200 </distfun_nv>
+
+    <!-- Highest Legendre term... l=0,1,...,nLeg -->
+    <nLeg> 2 </nLeg>
+
+    <!-- Fudge factor in colrad model to increase loss of highest state -->
+    <flast> 10. </flast>
+
+    <!-- Parameter of output grid dimension -->
+    <nrhoout> 20 </nrhoout>
+
+    <!-- Parameter decides timing of output (output_timing = 1: get the output after full delta-t) -->
+    <output_timing> 1 </output_timing>
+
+    <!-- Prop. factor to control rk4 orbiting time-step = orbit_dt_fac/v-->
+    <orbit_dt_fac> 1.56 </orbit_dt_fac>
+
+    <!-- Output switch for writing deposition as 2D arrays (radius, pitch) (always 0) -->
+    <depo_nxi> 0 </depo_nxi>
+
+    <!-- Paramter decides vary time step or not -->
+    <vchangecor> false </vchangecor>
+
+    <!-- Initialize parameter of delta-t (in special case) -->
+    <force_dt> -1. </force_dt>
+
+    <!-- Parameter for output file of the orbits -->
+    <it_orbout> -1 </it_orbout>
+
+    <!-- Number of points along line-of-sight -->
+    <nlospts> 0 </nlospts>
+
+    <!-- Maximum value of major radius -->
+    <Rmax> 99.0 </Rmax>
+
+    <!-- Minimum value of major radius -->
+    <Rmin> -99.0 </Rmin>
+
+    <!-- Limiter information in r-coordinate -->
+    <Rlim> 99.0 </Rlim>
+
+    <!-- Limiter information in z-coordinate -->
+    <Zlim> 99.0 </Zlim>
+
+    <!-- number of hydrogen atomic states -->
+    <nmax> 2 </nmax>
+
+    <!-- maximum injected energy per one beam line-->
+    <Einjmax> 1.0e6 </Einjmax>
+
+    <!-- number of impurity tables RABBIT has -->
+    <ntable_imp>4</ntable_imp>
+
+    <!-- list of impurity tables RABBIT has (atomic mass) -->
+    <table_imp_a>10 12 20 56</table_imp_a>
+
+    <!-- list of impurity tables RABBIT has (nuclear charge) -->
+    <table_imp_z>5 6 10 28</table_imp_z>
+</parameters>

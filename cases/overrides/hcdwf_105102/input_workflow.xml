@@ -1,0 +1,65 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+  <workflow_parameters display="Workflow parameters (standalone)">
+    <input_user_or_path display="Input user or path">unused_by_pds_source</input_user_or_path>
+    <input_database display="Input database">ITER</input_database>
+    <input_backend display="Input backend">HDF5</input_backend>
+    <ddv_backend display="Input DD version (3 or 4)">4</ddv_backend>
+    <shot_nr display="Input shot">105102</shot_nr>
+    <run_in display="Input run">3</run_in>
+    <output_user_or_path display="Output user or path">default</output_user_or_path>
+    <output_database display="Output database">default</output_database>
+    <output_backend display="Output backend">HDF5</output_backend>
+    <run_out display="Output run">307</run_out>
+    <tbegin display="Start Time [s]">-1</tbegin>
+	<tend display="End Time   [s]">-1</tend>
+    <dt_required display="Time Step  [s]">2</dt_required>
+    <parallel_workflow display="Parallel workflow [0-1]">0</parallel_workflow>
+    <one_time_slice display="Single time slice [0-1]">1</one_time_slice>
+  </workflow_parameters>
+
+  <actor_selection display="Actor selection"> <!-- 0 = None; >0 follows code ordering -->
+    <main_process display="Main processes">
+
+      <EQUI display="EQUILIBRIUM">
+	<equilibrium_solver display="Equilibrium solver" list="chease">0</equilibrium_solver>
+      </EQUI>
+
+      <ECRH display="ECH">
+	<ec_wave_solver display="Wave solver" list="genray gray grayscale torbeam toray">4</ec_wave_solver>
+	<ec_wave_fp display="Electron Fokker-Planck" list="relax">0</ec_wave_fp>
+      </ECRH>
+
+      <LHCD display="LHCD">
+	<lh_wave_solver display="Wave solver" list="lhcd_metis">0</lh_wave_solver>
+      </LHCD>
+
+      <ICRH display="ICRH">
+	<ic_coup display="Coupling" list="iccoup">0</ic_coup>
+	<ic_wave_solver display="Wave solver" list="cyrano tomcat pion lion">1</ic_wave_solver>
+	<ic_wave_fp display="Ion Fokker-Planck" list="stix_redist fopla">2</ic_wave_fp>
+      </ICRH>
+
+      <NBI display="NBI">
+	<nbi_source display="Beam deposition" list="nemo bbnbi_serial bbnbi_parallel">0</nbi_source>
+	<nbi_fp display="Ion Fokker-Planck" list="rabbit risk spot ascot_serial ascot_parallel nbisim">1</nbi_fp>
+      </NBI>
+
+      <NUCLEAR display="Nuclear reactions">
+	<nuclear_source display="Source" list="afsi">0</nuclear_source>
+	<nuclear_fp display="Ion Fokker-Planck" list="spot ascot_serial ascot_parallel">0</nuclear_fp>
+      </NUCLEAR>
+    </main_process>
+
+    <post_process display="Post-processing">
+      <source display="Fill core_sources">
+	<fill_core_sources display="core_sources IDS" list="hcd2core_sources">1</fill_core_sources>
+      </source>
+      <profiles display="Fill core_profiles">
+	<fill_core_profiles display="core_profiles IDS" list="hcd2core_profiles">0</fill_core_profiles>
+      </profiles>
+    </post_process>
+
+  </actor_selection>
+
+</root>

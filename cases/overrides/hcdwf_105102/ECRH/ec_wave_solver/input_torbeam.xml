@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<parameters>
+
+  <!-- Power absorption on(1)/off(0) -->
+  <npow> 1 </npow>
+  <!-- Current drive calc. on(1)/off(0) (set to 0 if npow=0) -->
+  <ncd> 1 </ncd>
+  <!-- 0 => Curba, 1 => Lin-Liu, 2 => Lin-Liu+mom. conserv. -->
+  <ncdroutine> 2 </ncdroutine>
+  <!-- Number of radial points for volume prof. -->
+  <nprofv> 50 </nprofv>
+  <!-- Screen output (0) or no output -->
+  <noout> 0 </noout>
+  <!-- Weakly (0) or fully (1) rel. absorption -->
+  <nrela> 1 </nrela>
+  <!-- Number of harmonics 1 <= nmaxh <= 5 -->
+  <nmaxh> 3 </nmaxh>
+  <!-- Westerhof's (0) or Farina's absorption routine -->
+  <nabsroutine> 1 </nabsroutine>
+  <!-- Def. of j-CD: Lin-Liu (0), ASTRA (1), JINTRAC (2) -->
+  <nastra> 0 </nastra>
+  <!-- Standard dep. profiles (0), profiles a la Maj' -->
+  <nprofcalc> 0 </nprofcalc>
+  <!-- Only lowest (0) or also next (1) harmonic in CD efficiency -->
+  <ncdharm> 1 </ncdharm>
+  <!-- Number of points used in coef. extrapolation -->
+  <npnts_extrap> 0 </npnts_extrap>
+  <!-- Number of steps on which coef. are extrapolated -->
+  <nfreq_extrap> 0 </nfreq_extrap>
+  <!-- 1 => rel. mass correction for reflectometry -->
+  <nrel> 0 </nrel>
+  <!-- Required rel. error -->
+  <xrtol> 1.e-7 </xrtol>
+  <!-- Required abs. error -->
+  <xatol> 1.e-7 </xatol>
+  <!-- Integration step in vacuum [cm] -->
+  <xstep> 2.0 </xstep>
+  <!-- Max. value of rho on exit -->
+  <rhostop> 0.96 </rhostop>
+  <!-- Vert. position for search of magn. axis (def. 0) -->
+  <xzsrch> 0. </xzsrch>
+  <!-- Write Torbeam input/output ascii files (1) or not (0) -->
+  <ascii_export> 0 </ascii_export>
+  <!-- Optionally save ray-tracing only every stepray points (to save memory) -->
+  <stepray> 20 </stepray>
+  <!-- Optionally save less than 5 rays per beam (to save memory) -->
+  <nray> 5 </nray>
+  <!-- Optionally reduce radial resolution to below 5000 (to save memory) -->
+  <nradial> 5000 </nradial>
+
+</parameters>

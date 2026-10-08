@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<parameters>
+  <fopla>
+    <max_iterations>2</max_iterations>             <!--Validated Hybrid FoPla pilot setting -->
+    <tolerance_Teff>20</tolerance_Teff>            <!--Tolerance on Teff evolution to stop the iterative scheme -->
+    <N_velocity_grid>3000</N_velocity_grid>        <!--Number of points in velocity grid for RunStix (no source) -->
+    <N_velocity_grid_fp>251</N_velocity_grid_fp>   <!--Number of points in velocity grid for Run_FP (with source)-->
+    <target_ions>7</target_ions>                   <!--H minority; matches the retained 5 MW FoPla pilot -->
+    <use_internal_power>false</use_internal_power> <!--1: compute RF absorption internally, 0: importing it from CPOs -->
+    <total_power>5.0e6</total_power>                   <!--Validated 5 MW integration-smoke setting; not a 10 MW physics claim -->
+    <Ntor>0</Ntor>                                 <!--Toroidal mode number (=0 read from waves, otherwise impose value) -->
+    <H_conc>0.0</H_conc>                           <!-- If > 0, impose Hconc=nH/ne; FOR TESTING ONLY. Keep at ZERO!-->
+    <only_perp>false</only_perp>                   <!--NOT READY: FALSE: default 1D procedure, TRUE: force RF power in perp. direction only -->
+    <include_alphas>0</include_alphas>             <!--0: Don't include fast alphas,  >0: Add alphas (from distribution)-->
+    <include_nbi>2</include_nbi>                   <!--Use Rabbit distributions as one NBI fast-ion species.-->
+    <select_nbi_data_source>2</select_nbi_data_source>   <!--1: Use data from distsource, 2: Use data from distribution, 3: Use data from core_sources-->
+    <renorm_nbi_losses>1</renorm_nbi_losses>               <!--1: Renormalize NBI power redistribution with total losses; 2: Redistribute Ploss for NBI ions based on vcrit and conc-->
+    <renorm_thermal_losses>1</renorm_thermal_losses>       <!--1: Renormalize thermal species redistribution with total losses; 2: Redistribute Ploss for thermal ions based on vcrit and conc-->
+    <imethod_ETS>10</imethod_ETS>             <!--Choose amongst various methods for assembling the Pcoll source per species for the ETS input: 1 (orig), 2-9 (dirk), 10 (ernesto new_proc)-->
+    <EsourcekeV>0</EsourcekeV>               <!--NBI source energy (keV), 0:read from CPO nbi, >0:impose source energy (keV)-->
+    <deltaS>1.e-1</deltaS>                   <!--NBI source width (% keV)-->
+    <impose_tau>false</impose_tau>           <!--Impose thermalization time (don't use S0 rate from CPO)-->
+    <tau_value>8.65e-2</tau_value>           <!--tauP value (same for all NBI sources)-->
+    <force_Te_eq_Ti>false</force_Te_eq_Ti>   <!--TRUE: Force Te=Ti, eliminates the equipartition substraction in Pcoll -->
+    <lnGamma_option>2</lnGamma_option>       <!--0: Used fixed lnGam=17.001084, 1: Use lnGam with electron background (NRL, i-e), Use lnGam with ion corrections LoGamFac (i-i) -->
+  </fopla>
+  <verbosity>3</verbosity>
+  <rm_tmp>false</rm_tmp>                            <!--TRUE: Delete temporary data folder -->
+</parameters>

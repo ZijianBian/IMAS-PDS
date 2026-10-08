@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<parameters>
+  <!-- Tension parameter to be used when splining curves. When the tension is 0.0 the passes through every node exactly, while for positive values the spline is smoothed. For more details, see https://crppwww.epfl.ch/~sauter/interpos/ -->
+  <tension> 0.001 </tension>
+
+  <!-- Verbosity:  0= quite, 1 = only error messages and warnings, 2 = idenitify start and end of code; 3 = Main results; 4 = Detailed logging -->
+  <verbosity> 3 </verbosity>
+
+  <!-- Radial resolution: if =-1 then taken from core_profiles -->
+  <radial_resolution> 5000 </radial_resolution>
+
+</parameters>

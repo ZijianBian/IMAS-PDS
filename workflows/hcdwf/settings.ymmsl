@@ -1,0 +1,14 @@
+ymmsl_version: v0.2
+
+settings:
+  # The input IDS defines the PDS clock and NBI powers.
+  # Use the HCD-supported DD version for every input and output endpoint.
+  source.dd_version: "4.1.0"
+  source.source_uri: "imas:hdf5?path=${CASE_DIR}/preprocess/input/source"
+  source.iterative: true
+  nbi_source.dd_version: "4.1.0"
+  nbi_source.source_uri: "imas:hdf5?path=${CASE_DIR}/preprocess/input/nbi"
+  nbi_source.interpolation_method: "closest"
+  sink.dd_version: "4.1.0"
+  sink.sink_uri: "imas:hdf5?path=${CASE_DIR}/output/hcd"
+  sink.sink_mode: "x"

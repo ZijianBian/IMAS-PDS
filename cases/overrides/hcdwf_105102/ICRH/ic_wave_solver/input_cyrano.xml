@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<parameters>
+  <input_cyrano>
+
+    <Npol>12</Npol>                       <!--Number of poloidal modes -->
+    <Np_out>0</Np_out>                    <!--Number of OUTPUT radial points (0:equilibrium, >1:value) -->
+    <BC_axis>1</BC_axis>                  <!--Axis boundary conditions test (0:circular BC, 1:D-shape BC) -->
+    <fix_triang>true</fix_triang>        <!--true: Fixed triangularity (edge value); false: Use triangularity fprofile from equilibrium CPO -->
+    <smooth>true</smooth>                <!--true: Smooth power deposition profiles in case of tangent resonances (e.g. for large Npol); false: Don't smooth -->
+
+    <self_consistent>
+      <iterate_Teff>false</iterate_Teff>   <!--For internal self-consistent calc. with Teff from Stix_Simple -->
+      <target_ions>2</target_ions>        <!--ion index for single species Teff calc. (0 = iterate on all ions) -->
+      <Npstix>3000</Npstix>               <!--No. of points for v-grid for the internal Stix solver -->
+      <gaussian_teff>true</gaussian_teff>    <!--true: Use Gaussian treatment of Teff; false: Use Teff directly from Stix subroutine -->
+    </self_consistent>
+
+    <fast_particles>
+      <include_nbi>2</include_nbi>           <!--Rabbit distributions provide the NBI fast-ion background for the NBI+IC synergy smoke.-->
+      <include_fasticrh>0</include_fasticrh> <!-- 0: Don't include fast ICRH species, 1: use corefast, 2: use distribution (NOT READY)-->
+      <include_alphas>0</include_alphas>     <!-- 0: Don't include fast alphas, 1: use corefast, 2: use distribution, 4: distsrc, 6:coresrc-->
+      <alpha_fac>0.0</alpha_fac>             <!-- If > 0, multiply alpha density by factor; FOR TESTING ONLY. Keep at ZERO!-->
+      <H_conc>0.0</H_conc>                   <!-- If > 0, impose Hconc=nH/ne; FOR TESTING ONLY. Keep at ZERO!-->
+    </fast_particles>
+
+    <overwrite_params>
+
+      <RF>
+	<total_power>10.0e6</total_power>       <!--Total RF Power [W] (0:waves, 1:antennas, 2:core_sources, >2:value) -->
+	<frequency>42.0e6</frequency>          <!--RF frequency (0:antennas, >0:value) — 21 MHz test: fundamental D at B≈2.6T, sanity check whether crash is due to missing H minority -->
+	<Ntor>-38</Ntor>                    <!--Single toroidal mode number (0:waves, nonzero:value) -->
+      </RF>
+
+      <impose_antenna>false</impose_antenna>  <!--If true use values in antenna_geometry, othervise use data from antennas -->
+      <antenna_geometry>
+	<R_antenna>0</R_antenna>           <!--Major radius of the antenna straps at Z=0 -->
+	<theta_antenna_min>-9e40</theta_antenna_min> <!--Lower end of the antenna straps given as a geometrical poloidal angle -->
+	<theta_antenna_max>-9e40</theta_antenna_max> <!--Upper end of the antenna straps given as a geometrical poloidal angle -->
+      </antenna_geometry>
+
+      <nullify_Ip>false</nullify_Ip> <!--If true set the plasma current and poloidal field to zero -->
+
+    </overwrite_params>
+
+    <!--
+    <charge_neutrality>
+      <enforce_species>electrons</enforce_species>
+    </charge_neutrality>
+    <advanced>
+      <minimum_density></minimum_density>
+      <maximum_valid_density></maximum_valid_density>
+    </advanced>
+    -->
+
+  </input_cyrano>
+
+  <verbosity>3</verbosity>
+  <rm_tmp>false</rm_tmp>                 <!--true: Delete temporary data folder -->
+
+</parameters>

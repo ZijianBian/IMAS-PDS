@@ -1,0 +1,88 @@
+# PDS-clocked HCD workflow with EC, IC and NBI actors.
+ymmsl_version: v0.2
+imports:
+- from imas_muscle3 import implementation source_component
+- from imas_muscle3 import implementation sink_component
+- from imas_muscle3 import implementation sink_source_component
+models:
+  hcdwf:
+    components:
+      source:
+        description: iterative source for the HCD Torbeam+Cyrano+Rabbit+FoPla workflow
+        implementation: source_component
+        ports:
+          o_i: [equilibrium_out, core_profiles_out, workflow_out, ec_launchers_out, ic_antennas_out, wall_out]
+      nbi_source:
+        description: sample the input NBI IDS at the PDS equilibrium time
+        implementation: sink_source_component
+        ports:
+          f_init: [equilibrium_in]
+          o_f: [nbi_out]
+      hcd_workflow:
+        description: existing HCD MUSCLE3 micro; no PDS-specific adapter
+        implementation: hcd_workflow
+        ports:
+          f_init: [equilibrium_in, core_profiles_in, workflow_in, ec_launchers_in, ic_antennas_in, nbi_in, wall_in]
+          o_f: [core_sources_out, waves_out, distributions_out]
+      sink:
+        description: persist the HCD heating and fast-ion outputs for inspection
+        implementation: sink_component
+        ports:
+          f_init: [core_sources_in, waves_in, distributions_in]
+    conduits:
+      source.equilibrium_out:
+      - hcd_workflow.equilibrium_in
+      - nbi_source.equilibrium_in
+      source.core_profiles_out: hcd_workflow.core_profiles_in
+      source.workflow_out: hcd_workflow.workflow_in
+      source.ec_launchers_out: hcd_workflow.ec_launchers_in
+      source.ic_antennas_out: hcd_workflow.ic_antennas_in
+      nbi_source.nbi_out: hcd_workflow.nbi_in
+      source.wall_out: hcd_workflow.wall_in
+      hcd_workflow.core_sources_out: sink.core_sources_in
+      hcd_workflow.waves_out: sink.waves_in
+      hcd_workflow.distributions_out: sink.distributions_in
+
+programs:
+  hcd_workflow:
+    base_env: clean
+    modules:
+    - IMAS-Python/2.3.0-intel-2023b
+    - IMAS-Fortran/5.5.0-intel-2023b-DD-4.1.0
+    - lxml/4.9.3-GCCcore-13.2.0
+    - XMLlib/3.2.0-intel-compilers-2023.2.1
+    - INTERPOS/9.2.0-iimkl-2023b
+    - Waveform-Cooker/1.6.0-GCCcore-13.2.0
+    - matplotlib/3.8.2-iimkl-2023b
+    - PyYAML/6.0.1-GCCcore-13.2.0
+    env:
+      IMAS_AL_DISABLE_VALIDATE: "1"
+      HCD_SOURCE_DIR: ${CASE_DIR}/assets/hcd-source
+      HCDWF_PDS_VENV_DIR: ${CASE_DIR}/assets/hcd-venv
+      HCDWF_IWRAP_ROOT: ${CASE_DIR}/assets/iwrap
+      HCDWF_PDS_PYTHONPATH: ${CASE_DIR}/assets/hcd-source:${CASE_DIR}/assets/hcd-venv/lib/python3.11/site-packages:${CASE_DIR}/assets/actors:${CASE_DIR}/assets/iwrap/python
+      HCDWF_PDS_ACTOR_ROOT: ${CASE_DIR}/assets/hcd-actors
+      HCDWF_PDS_ACTOR_PATH_FILE: ${CASE_DIR}/assets/actor_pythonpath.txt
+      HCDWF_PDS_CONFIG_DIR: ${CASE_DIR}/preprocess/hcd_config
+      PYTHONNOUSERSITE: "1"
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    executable: /usr/bin/env
+    # Keep the Rabbit DD4 build and all other actor versions unchanged.
+    args:
+    - IMAS_VERSION=4.1.0
+    - 'PATH="${HCDWF_PDS_VENV_DIR}/bin:${HCDWF_IWRAP_ROOT}/bin:${PATH}"'
+    - 'ACTOR_FOLDER="${HCDWF_PDS_ACTOR_ROOT}"'
+    - 'PYTHONPATH="${HCD_SOURCE_DIR}:$(cat "${HCDWF_PDS_ACTOR_PATH_FILE}"):${HCDWF_PDS_ACTOR_ROOT}:${HCDWF_PDS_PYTHONPATH}:${PYTHONPATH:-}"'
+    - 'MPLCONFIGDIR="${PWD}/.matplotlib"'
+    - '"${HCDWF_PDS_VENV_DIR}/bin/python" -u -m hcdworkflow.hcd_workflow_m3'
+    - '"${HCDWF_PDS_CONFIG_DIR}"'
+resources:
+  hcdwf.source:
+    threads: 1
+  hcdwf.nbi_source:
+    threads: 1
+  hcdwf.hcd_workflow:
+    threads: 1
+  hcdwf.sink:
+    threads: 1
