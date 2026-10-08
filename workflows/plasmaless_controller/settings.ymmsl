@@ -1,0 +1,37 @@
+ymmsl_version: v0.2
+
+# Generic settings for plasmaless_controller, stacked after workflow.ymmsl by
+# bin/pds-create-case / bin/pds-run. ${SHOT} is filled in by pds-create-case. As for
+# evolutive_controller, the pulse window (source.t_min/t_max, plasmaless.t_end) is
+# per-shot: every shot needs cases/overrides/plasmaless_controller_<shot>.ymmsl.
+
+settings:
+  # Scenario: source reads the NICE inverse equilibrium and pf_active (nice_out) of a
+  # completed metis_nice_inverse_from_dina run for the same shot (cases/runs/<case>
+  # convention of bin/pds-create-case / bin/pds-run-case.sbatch), one whole-window
+  # message per IDS. waveform_editor (this directory's waveforms.yaml) passes the
+  # equilibrium through and fills pf_active coil currents/voltages from the inverse
+  # pf_active; only the machine description (wall, pf_passive, iron_core, pf_active)
+  # comes from pds-scenarios ${SHOT}/data/in_md. Nothing is read from ${SHOT}/data/in.
+  source.source_uri: "imas:hdf5?path=${PDS_REPO}/cases/runs/metis_nice_inverse_from_dina_${SHOT}/nice_out"
+  source.iterative: False
+  source.t_min: 0.0
+  waveform_editor.waveforms: ${PDS_REPO}/workflows/plasmaless_controller/waveforms.yaml
+
+  # Plasmaless model: step and exchange period (must be equal), same value as
+  # nice_evo_rd in evolutive_controller.
+  plasmaless.dt: 0.01
+  plasmaless.t_interval: 0.01
+  # Model machine description (em_coupling, pf_active, pf_passive, DD 4): not set here,
+  # the actor's default is data/md_dd4 of the plasmaless repository it runs from
+  # (PLASMALESS_REPO, see the plasmaless program in lib/easybuild_programs.ymmsl).
+  # Set plasmaless.md_uri to use another entry.
+
+  # Output. `../../../` climbs out of the instance's own work directory, so the entries
+  # land next to the run's logs in <run_dir>/ rather than under instances/.
+  sink_equilibrium.sink_uri: "imas:hdf5?path=../../../out_plasmaless"
+  sink_control.sink_uri: "imas:hdf5?path=../../../out_controller"
+  sink_equilibrium.sink_mode: "w"
+  sink_control.sink_mode: "w"
+
+  muscle_remote_log_level: 'INFO'

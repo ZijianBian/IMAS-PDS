@@ -1,0 +1,43 @@
+# Waveform-Editor configuration for plasmaless_controller's F_INIT bootstrap.
+# Derived from workflows/evolutive_controller/waveforms.yaml, with every plasma and coil
+# quantity taken from the NICE inverse run instead of pds-scenarios ${SHOT}/data/in (DINA):
+# - `eq` (port equilibrium_in) is the inverse equilibrium (nice_out), passed through whole
+#   by `reconstruction:`; the `targets:` overrides of ip, boundary outline and vacuum
+#   toroidal field from data/in are gone, so those come from nice_out too. nice_out
+#   leaves vacuum_toroidal_field/r0 empty (b0 is filled); no consumer of this workflow
+#   reads r0.
+# - `pf` (port pf_active_in) is the inverse pf_active (nice_out), resampled onto the
+#   equilibrium times: coil currents and voltages. For 105084, nice_out's coil voltages
+#   equal the DINA data/in voltages of the closest DINA sample exactly (carried through
+#   the inverse run, not computed by it).
+# - The machine description (wall, pf_passive, iron_core, pf_active geometry, turns,
+#   resistances, limits) still comes from pds-scenarios ${SHOT}/data/in_md.
+# core_profiles/core_sources (TORAX/NICE inputs in evolutive_controller) are not needed:
+# no component of this workflow consumes them.
+globals:
+  dd_version: 4.0.0
+  imports:
+    input_md: "imas:hdf5?path=${SCENARIOS_REPO}/${SHOT}/data/in_md"
+    eq: {port: equilibrium_in}
+    pf: {port: pf_active_in}
+
+# Static machine-description reference
+machine_description:
+  wall/*:
+    - {ref: input_md}
+  pf_passive/*:
+    - {ref: input_md}
+  iron_core/*:
+    - {ref: input_md}
+  pf_active/*:
+    - {ref: input_md}
+
+reconstruction:
+  equilibrium/*:
+    - {ref: eq}
+
+targets:
+  pf_active/coil(*)/current/data:
+    - {ref: pf}
+  pf_active/coil(*)/voltage/data:
+    - {ref: pf}
